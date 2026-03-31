@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-title MQTT WS Serial Server
+title MQTT WS Serial Server + Meter API
 
 echo ============================================
-echo   MQTT WebSocket Serial Transparent Server
+echo   Unified Serial Server (MQTT WS + API)
 echo ============================================
 echo.
 
@@ -30,8 +30,10 @@ echo Installing dependencies...
 pip install -r requirements.txt -q
 echo.
 
-REM Start server
-echo [3/3] Starting server...
+REM Start unified server (MQTT WS bridge + Meter API)
+echo [3/3] Starting unified server...
+echo   MQTT WS bridge: serial/comXX/up, serial/comXX/down
+echo   Meter API: http://localhost:8000/docs
 echo ============================================
 python server.py
 

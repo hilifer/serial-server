@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Meter Data API Service
+Meter Data API (FastAPI routes)
 
-Provides REST API to query energy meter data over Modbus RTU via serial port (COM33).
-Supports ADL400 (AC) and DJSF1352-RN/RN-6 (DC) meters.
+Uses shared SerialManager from server.py for COM33 access.
+Coexists with MQTT WS transparent bridge — both share the same
+serial port lock, preventing bus conflicts.
 
 Endpoints:
   GET /meters                          - List all meters
@@ -13,133 +14,23 @@ Endpoints:
   GET /meter/{addr}/yearly             - Yearly summary (sum of 12 months)
 """
 
-import time
-import threading
 import logging
-from pathlib import Path
 
-import serial
-import yaml
-import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from meter import (
     MeterType, MeterInfo, METERS, METER_BY_ADDR,
-    ADL400_REALTIME, DJSF_REALTIME,
+    ADL400_REALTIME, DJSF_REALTIME, DJSF_MONTHLY_MAX,
     build_read_request, parse_read_response, parse_register_value,
-    build_realtime_requests,
     build_daily_history_request,
     build_monthly_history_request_adl400,
     build_monthly_history_request_djsf,
     parse_adl400_history_block,
     parse_djsf_monthly_energy,
-    DJSF_MONTHLY_CURRENT_FWD, DJSF_MONTHLY_CURRENT_REV,
 )
 
 logger = logging.getLogger("meter-api")
-
-# ---------------------------------------------------------------------------
-# Serial port manager (thread-safe)
-# ---------------------------------------------------------------------------
-
-class SerialManager:
-    """Thread-safe serial port manager for Modbus RTU communication.
-
-    Supports two usage patterns:
-      1. Single request: ser.send_and_receive(frame) — auto locks per call.
-      2. Batch requests: with ser.lock():
-             ser.send_and_receive_unlocked(frame1)
-             ser.send_and_receive_unlocked(frame2)
-         — holds the lock for the entire batch, preventing interleaving.
-    """
-
-    def __init__(self, port: str, baudrate: int = 9600, timeout: float = 0.5):
-        self.port = port
-        self.baudrate = baudrate
-        self.timeout = timeout
-        self._lock = threading.RLock()
-        self._serial: serial.Serial | None = None
-
-    def open(self):
-        if self._serial and self._serial.is_open:
-            return
-        self._serial = serial.Serial(
-            port=self.port,
-            baudrate=self.baudrate,
-            bytesize=8,
-            parity="N",
-            stopbits=1,
-            timeout=self.timeout,
-        )
-        logger.info("Serial port %s opened @ %d baud", self.port, self.baudrate)
-
-    def close(self):
-        if self._serial and self._serial.is_open:
-            self._serial.close()
-            logger.info("Serial port %s closed", self.port)
-
-    def lock(self):
-        """Return the RLock as a context manager for batch operations.
-
-        Usage:
-            with ser.lock():
-                ser.send_and_receive_unlocked(req1)
-                ser.send_and_receive_unlocked(req2)
-        """
-        return self._lock
-
-    def _do_send_recv(self, request: bytes) -> bytes:
-        """Internal: send request and read response (caller must hold lock)."""
-        if not self._serial or not self._serial.is_open:
-            self.open()
-        self._serial.reset_input_buffer()
-        self._serial.write(request)
-        logger.debug("TX: %s", request.hex())
-
-        time.sleep(0.05)
-
-        response = b""
-        deadline = time.time() + self.timeout
-        while time.time() < deadline:
-            chunk = self._serial.read(self._serial.in_waiting or 1)
-            if chunk:
-                response += chunk
-                time.sleep(0.02)
-            elif response:
-                break
-
-        logger.debug("RX: %s", response.hex())
-        return response
-
-    def send_and_receive(self, request: bytes) -> bytes:
-        """Send a Modbus request and wait for response (auto-locking)."""
-        with self._lock:
-            return self._do_send_recv(request)
-
-    def send_and_receive_unlocked(self, request: bytes) -> bytes:
-        """Send a Modbus request without acquiring the lock.
-
-        Caller MUST hold self.lock() before calling this method.
-        """
-        return self._do_send_recv(request)
-
-
-# ---------------------------------------------------------------------------
-# Load config for serial port
-# ---------------------------------------------------------------------------
-
-def load_serial_config() -> dict:
-    config_path = Path(__file__).parent / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
-    # Find COM33 config
-    for port_cfg in config["serial_ports"]:
-        if port_cfg["name"] == "COM33":
-            return port_cfg
-    # Fallback to last port
-    return config["serial_ports"][-1]
-
 
 # ---------------------------------------------------------------------------
 # FastAPI application
@@ -147,8 +38,9 @@ def load_serial_config() -> dict:
 
 app = FastAPI(
     title="Energy Meter API",
-    description="Query energy meter data via Modbus RTU (COM33)",
-    version="1.0.0",
+    description="Query energy meter data via Modbus RTU (COM33). "
+                "Shares serial port with MQTT WS transparent bridge.",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -158,35 +50,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Global serial manager
-serial_mgr: SerialManager | None = None
 
-
-@app.on_event("startup")
-def startup():
-    global serial_mgr
-    port_cfg = load_serial_config()
-    serial_mgr = SerialManager(
-        port=port_cfg["port"],
-        baudrate=port_cfg["baudrate"],
-        timeout=port_cfg.get("timeout", 0.5),
-    )
-    try:
-        serial_mgr.open()
-    except serial.SerialException as e:
-        logger.warning("Could not open serial port on startup: %s (will retry on first request)", e)
-
-
-@app.on_event("shutdown")
-def shutdown():
-    if serial_mgr:
-        serial_mgr.close()
-
-
-def get_serial() -> SerialManager:
-    if serial_mgr is None:
-        raise HTTPException(500, "Serial port not initialized")
-    return serial_mgr
+def get_serial():
+    """Get the shared SerialManager for COM33 from server.serial_managers."""
+    from server import serial_managers
+    mgr = serial_managers.get("COM33")
+    if mgr is None:
+        raise HTTPException(500, "COM33 SerialManager not initialized")
+    return mgr
 
 
 def get_meter(addr: int) -> MeterInfo:
@@ -326,11 +197,9 @@ def get_monthly(addr: int, months_ago: int = Query(1, ge=1, le=48)):
             "data": result,
         }
     else:
-        # DJSF: read month by calendar month number
         if months_ago > DJSF_MONTHLY_MAX:
             raise HTTPException(400, f"DJSF supports up to 12 months, got {months_ago}")
 
-        # Read forward energy for that month
         req_fwd = build_monthly_history_request_djsf(
             meter.slave_addr, months_ago, "forward")
         req_rev = build_monthly_history_request_djsf(
@@ -404,7 +273,6 @@ def get_yearly(addr: int):
             "months": monthly_data,
         }
     else:
-        # DJSF: sum 12 months
         total_fwd = 0.0
         total_rev = 0.0
         months = []
@@ -447,20 +315,3 @@ def get_yearly(addr: int):
             "total_reverse_kwh": round(total_rev, 2),
             "months": months,
         }
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
-
-def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s] %(levelname)-7s %(name)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-if __name__ == "__main__":
-    main()

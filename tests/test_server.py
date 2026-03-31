@@ -1,8 +1,8 @@
-"""Unit tests for MQTT WebSocket Serial Server."""
+"""Unit tests for unified MQTT WS Serial Server."""
 
 import threading
 import time
-from unittest.mock import MagicMock, patch, PropertyMock, call
+from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
@@ -12,6 +12,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from server import SerialBridge, MQTTSerialServer, load_config, setup_logging
+from serial_manager import SerialManager
+import server as server_module
 
 
 # ---------------------------------------------------------------------------
@@ -64,8 +66,30 @@ def port_cfg():
 
 
 @pytest.fixture
-def bridge(mock_mqtt_client, port_cfg):
-    return SerialBridge(mock_mqtt_client, port_cfg)
+def mock_serial_mgr():
+    mgr = MagicMock(spec=SerialManager)
+    mgr.lock.return_value = threading.RLock()
+    mgr.read_available.return_value = b""
+    return mgr
+
+
+@pytest.fixture
+def bridge(mock_mqtt_client, port_cfg, mock_serial_mgr):
+    return SerialBridge(mock_mqtt_client, port_cfg, mock_serial_mgr)
+
+
+@pytest.fixture(autouse=True)
+def setup_serial_managers():
+    """Ensure server.serial_managers has entries for tests that create MQTTSerialServer."""
+    original = server_module.serial_managers.copy()
+    for port_cfg in SAMPLE_CONFIG["serial_ports"]:
+        mgr = MagicMock(spec=SerialManager)
+        mgr.lock.return_value = threading.RLock()
+        mgr.read_available.return_value = b""
+        server_module.serial_managers[port_cfg["name"]] = mgr
+    yield
+    server_module.serial_managers.clear()
+    server_module.serial_managers.update(original)
 
 
 # ---------------------------------------------------------------------------
@@ -119,8 +143,8 @@ class TestSerialBridgeInit:
     def test_name(self, bridge):
         assert bridge.name == "COM31"
 
-    def test_serial_conn_initially_none(self, bridge):
-        assert bridge.serial_conn is None
+    def test_uses_shared_manager(self, bridge, mock_serial_mgr):
+        assert bridge.mgr is mock_serial_mgr
 
 
 # ---------------------------------------------------------------------------
@@ -128,28 +152,17 @@ class TestSerialBridgeInit:
 # ---------------------------------------------------------------------------
 
 class TestSerialBridgeOpen:
-    @patch("server.serial.Serial")
-    def test_open_creates_serial_connection(self, mock_serial_cls, bridge):
+    def test_open_calls_mgr_open(self, bridge, mock_serial_mgr):
         bridge.open()
-        mock_serial_cls.assert_called_once_with(
-            port="COM31",
-            baudrate=9600,
-            bytesize=8,
-            parity="N",
-            stopbits=1,
-            timeout=0.1,
-        )
-        assert bridge.serial_conn is not None
+        mock_serial_mgr.open.assert_called_once()
 
-    @patch("server.serial.Serial")
-    def test_open_subscribes_mqtt_topic(self, mock_serial_cls, bridge):
+    def test_open_subscribes_mqtt_topic(self, bridge):
         bridge.open()
         bridge.mqtt_client.subscribe.assert_called_once_with(
             "serial/com31/down", qos=1
         )
 
-    @patch("server.serial.Serial")
-    def test_open_starts_read_thread(self, mock_serial_cls, bridge):
+    def test_open_starts_read_thread(self, bridge):
         bridge.open()
         assert bridge._read_thread is not None
         assert bridge._read_thread.is_alive()
@@ -157,44 +170,18 @@ class TestSerialBridgeOpen:
         bridge._stop_event.set()
         bridge._read_thread.join(timeout=1)
 
-    @patch("server.serial.Serial", side_effect=Exception("port not found"))
-    def test_open_raises_on_serial_failure(self, mock_serial_cls, bridge):
-        with pytest.raises(Exception, match="port not found"):
-            bridge.open()
-
 
 # ---------------------------------------------------------------------------
 # Tests: SerialBridge.write
 # ---------------------------------------------------------------------------
 
 class TestSerialBridgeWrite:
-    def test_write_sends_data_to_serial(self, bridge):
-        mock_serial = MagicMock()
-        mock_serial.is_open = True
-        bridge.serial_conn = mock_serial
-
+    def test_write_calls_mgr_write_raw(self, bridge, mock_serial_mgr):
         bridge.write(b"\x01\x02\x03")
-        mock_serial.write.assert_called_once_with(b"\x01\x02\x03")
+        mock_serial_mgr.write_raw.assert_called_once_with(b"\x01\x02\x03")
 
-    def test_write_noop_when_not_open(self, bridge):
-        bridge.serial_conn = None
-        bridge.write(b"\x01\x02\x03")  # should not raise
-
-    def test_write_noop_when_closed(self, bridge):
-        mock_serial = MagicMock()
-        mock_serial.is_open = False
-        bridge.serial_conn = mock_serial
-
-        bridge.write(b"\x01\x02\x03")
-        mock_serial.write.assert_not_called()
-
-    def test_write_handles_serial_exception(self, bridge):
-        import serial as pyserial
-        mock_serial = MagicMock()
-        mock_serial.is_open = True
-        mock_serial.write.side_effect = pyserial.SerialException("write error")
-        bridge.serial_conn = mock_serial
-
+    def test_write_handles_exception(self, bridge, mock_serial_mgr):
+        mock_serial_mgr.write_raw.side_effect = Exception("write error")
         bridge.write(b"\x01")  # should not raise
 
 
@@ -203,17 +190,19 @@ class TestSerialBridgeWrite:
 # ---------------------------------------------------------------------------
 
 class TestSerialBridgeReadLoop:
-    @patch("server.serial.Serial")
-    def test_read_loop_publishes_to_mqtt(self, mock_serial_cls, bridge):
+    def test_read_loop_publishes_to_mqtt(self, bridge, mock_serial_mgr):
         """Simulate serial data arriving and verify MQTT publish."""
-        mock_serial = MagicMock()
-        # First call: data available; second call: stop
-        mock_serial.in_waiting = PropertyMock(side_effect=[5, 0])
-        type(mock_serial).in_waiting = PropertyMock(side_effect=[5, 0, 0])
-        mock_serial.read.return_value = b"hello"
-        bridge.serial_conn = mock_serial
+        call_count = 0
 
-        # Run one iteration then stop
+        def fake_read():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return b"hello"
+            return b""
+
+        mock_serial_mgr.read_available.side_effect = fake_read
+
         def stop_after_publish(*args, **kwargs):
             bridge._stop_event.set()
 
@@ -227,11 +216,8 @@ class TestSerialBridgeReadLoop:
         )
 
     def test_read_loop_stops_on_event(self, bridge):
-        bridge.serial_conn = MagicMock()
-        type(bridge.serial_conn).in_waiting = PropertyMock(return_value=0)
         bridge._stop_event.set()
-        # Should return immediately
-        bridge._read_loop()
+        bridge._read_loop()  # Should return immediately
 
 
 # ---------------------------------------------------------------------------
@@ -243,18 +229,9 @@ class TestSerialBridgeClose:
         bridge.close()
         assert bridge._stop_event.is_set()
 
-    def test_close_closes_serial(self, bridge):
-        mock_serial = MagicMock()
-        mock_serial.is_open = True
-        bridge.serial_conn = mock_serial
-
-        bridge.close()
-        mock_serial.close.assert_called_once()
-
     def test_close_joins_thread(self, bridge):
         mock_thread = MagicMock()
         bridge._read_thread = mock_thread
-
         bridge.close()
         mock_thread.join.assert_called_once_with(timeout=2)
 
@@ -266,37 +243,41 @@ class TestSerialBridgeClose:
 class TestMQTTSerialServer:
     @patch("server.mqtt.Client")
     def test_creates_three_bridges(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-        assert len(server.bridges) == 3
-        assert set(server.bridges.keys()) == {"COM31", "COM32", "COM33"}
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        assert len(srv.bridges) == 3
+        assert set(srv.bridges.keys()) == {"COM31", "COM32", "COM33"}
+
+    @patch("server.mqtt.Client")
+    def test_bridges_use_shared_managers(self, mock_mqtt_cls):
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        for name, bridge in srv.bridges.items():
+            assert bridge.mgr is server_module.serial_managers[name]
 
     @patch("server.mqtt.Client")
     def test_topic_bridge_map(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-        assert "serial/com31/down" in server._topic_bridge_map
-        assert "serial/com32/down" in server._topic_bridge_map
-        assert "serial/com33/down" in server._topic_bridge_map
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        assert "serial/com31/down" in srv._topic_bridge_map
+        assert "serial/com32/down" in srv._topic_bridge_map
+        assert "serial/com33/down" in srv._topic_bridge_map
 
     @patch("server.mqtt.Client")
     def test_mqtt_client_uses_websockets(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
         mock_mqtt_cls.assert_called_once()
-        args, kwargs = mock_mqtt_cls.call_args
-        assert kwargs.get("transport") == "websockets" or \
-               (len(args) >= 3 and args[2] == "websockets") or \
-               "websockets" in str(mock_mqtt_cls.call_args)
+        assert "websockets" in str(mock_mqtt_cls.call_args)
 
     @patch("server.mqtt.Client")
     def test_mqtt_auth_when_username_set(self, mock_mqtt_cls):
-        config = SAMPLE_CONFIG.copy()
-        config["mqtt"] = {**config["mqtt"], "username": "user", "password": "pass"}
-        server = MQTTSerialServer(config)
-        server.mqtt_client.username_pw_set.assert_called_once_with("user", "pass")
+        config = {**SAMPLE_CONFIG,
+                  "mqtt": {**SAMPLE_CONFIG["mqtt"],
+                           "username": "user", "password": "pass"}}
+        srv = MQTTSerialServer(config)
+        srv.mqtt_client.username_pw_set.assert_called_once_with("user", "pass")
 
     @patch("server.mqtt.Client")
     def test_mqtt_no_auth_when_empty(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-        server.mqtt_client.username_pw_set.assert_not_called()
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        srv.mqtt_client.username_pw_set.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -306,65 +287,51 @@ class TestMQTTSerialServer:
 class TestMQTTSerialServerCallbacks:
     @patch("server.mqtt.Client")
     def test_on_message_routes_to_bridge(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
-        # Mock write on bridge
-        server.bridges["COM31"].write = MagicMock()
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        srv.bridges["COM31"].write = MagicMock()
 
         msg = MagicMock()
         msg.topic = "serial/com31/down"
         msg.payload = b"\xAA\xBB"
 
-        server._on_message(None, None, msg)
-        server.bridges["COM31"].write.assert_called_once_with(b"\xAA\xBB")
+        srv._on_message(None, None, msg)
+        srv.bridges["COM31"].write.assert_called_once_with(b"\xAA\xBB")
 
     @patch("server.mqtt.Client")
     def test_on_message_unknown_topic(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
         msg = MagicMock()
         msg.topic = "serial/com99/down"
         msg.payload = b"\x00"
-
-        # Should not raise
-        server._on_message(None, None, msg)
+        srv._on_message(None, None, msg)  # Should not raise
 
     @patch("server.mqtt.Client")
     def test_on_connect_success_opens_bridges(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
-        for bridge in server.bridges.values():
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        for bridge in srv.bridges.values():
             bridge.open = MagicMock()
-
-        server._on_connect(None, None, None, 0)
-
-        for bridge in server.bridges.values():
+        srv._on_connect(None, None, None, 0)
+        for bridge in srv.bridges.values():
             bridge.open.assert_called_once()
 
     @patch("server.mqtt.Client")
     def test_on_connect_failure_does_not_open(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
-        for bridge in server.bridges.values():
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        for bridge in srv.bridges.values():
             bridge.open = MagicMock()
-
-        server._on_connect(None, None, None, 5)  # rc != 0
-
-        for bridge in server.bridges.values():
+        srv._on_connect(None, None, None, 5)
+        for bridge in srv.bridges.values():
             bridge.open.assert_not_called()
 
     @patch("server.mqtt.Client")
     def test_on_connect_tolerates_bridge_failure(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
-        # First bridge fails, others should still open
-        bridges = list(server.bridges.values())
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        bridges = list(srv.bridges.values())
         bridges[0].open = MagicMock(side_effect=Exception("fail"))
         bridges[1].open = MagicMock()
         bridges[2].open = MagicMock()
 
-        server._on_connect(None, None, None, 0)
-
+        srv._on_connect(None, None, None, 0)
         bridges[1].open.assert_called_once()
         bridges[2].open.assert_called_once()
 
@@ -376,36 +343,45 @@ class TestMQTTSerialServerCallbacks:
 class TestMQTTSerialServerStartStop:
     @patch("server.mqtt.Client")
     def test_stop_closes_all_bridges(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-        for bridge in server.bridges.values():
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        for bridge in srv.bridges.values():
             bridge.close = MagicMock()
-
-        server.stop()
-
-        for bridge in server.bridges.values():
+        srv.stop()
+        for bridge in srv.bridges.values():
             bridge.close.assert_called_once()
 
     @patch("server.mqtt.Client")
     def test_stop_disconnects_mqtt(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-        for bridge in server.bridges.values():
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        for bridge in srv.bridges.values():
             bridge.close = MagicMock()
-
-        server.stop()
-        server.mqtt_client.loop_stop.assert_called_once()
-        server.mqtt_client.disconnect.assert_called_once()
+        srv.stop()
+        srv.mqtt_client.loop_stop.assert_called_once()
+        srv.mqtt_client.disconnect.assert_called_once()
 
     @patch("server.mqtt.Client")
     def test_start_connects_to_broker(self, mock_mqtt_cls):
-        server = MQTTSerialServer(SAMPLE_CONFIG)
-
-        # Make start() return immediately
-        def set_stop(*a, **kw):
-            server._stop_event.set()
-
-        server.mqtt_client.loop_start.side_effect = set_stop
-
-        server.start()
-        server.mqtt_client.connect.assert_called_once_with(
+        srv = MQTTSerialServer(SAMPLE_CONFIG)
+        srv.start()
+        srv.mqtt_client.connect.assert_called_once_with(
             "localhost", 9001, keepalive=60
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests: SerialManager shared instance
+# ---------------------------------------------------------------------------
+
+class TestSerialManagerShared:
+    def test_serial_managers_dict_exists(self):
+        assert isinstance(server_module.serial_managers, dict)
+
+    def test_get_serial_manager(self):
+        mgr = server_module.get_serial_manager("COM31")
+        assert mgr is not None
+
+    def test_get_serial_manager_missing(self):
+        original = server_module.serial_managers.copy()
+        server_module.serial_managers.clear()
+        assert server_module.get_serial_manager("COM99") is None
+        server_module.serial_managers.update(original)

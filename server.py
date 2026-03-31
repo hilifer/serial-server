@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-MQTT WebSocket Serial Transparent Transmission Server
+Unified MQTT WebSocket Serial Server + Meter API
 
-Bridges serial ports (COM31, COM32, COM33) with MQTT over WebSocket.
-Each serial port maps to an MQTT topic pair:
-  - serial/<port>/up   : serial -> MQTT (data read from serial)
-  - serial/<port>/down : MQTT -> serial (data written to serial)
+Runs a single process that provides:
+  1. MQTT WS transparent bridge for COM31, COM32, COM33
+  2. REST API on port 8000 for meter data queries (COM33)
+
+Both services share the same SerialManager instances per port,
+protected by RLock to prevent concurrent bus conflicts.
 """
 
 import signal
@@ -16,8 +18,10 @@ import logging
 from pathlib import Path
 
 import yaml
-import serial
 import paho.mqtt.client as mqtt
+import uvicorn
+
+from serial_manager import SerialManager, create_serial_manager
 
 logger = logging.getLogger("serial-server")
 
@@ -28,36 +32,38 @@ def load_config(path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-class SerialBridge:
-    """Manages one serial port <-> MQTT topic pair."""
+# ---------------------------------------------------------------------------
+# Global registry: port name -> SerialManager (shared across MQTT + API)
+# ---------------------------------------------------------------------------
 
-    def __init__(self, mqtt_client: mqtt.Client, port_cfg: dict):
+serial_managers: dict[str, SerialManager] = {}
+
+
+def get_serial_manager(name: str) -> SerialManager | None:
+    return serial_managers.get(name)
+
+
+# ---------------------------------------------------------------------------
+# MQTT WS Transparent Bridge
+# ---------------------------------------------------------------------------
+
+class SerialBridge:
+    """Manages one serial port <-> MQTT topic pair using a shared SerialManager."""
+
+    def __init__(self, mqtt_client: mqtt.Client, port_cfg: dict,
+                 mgr: SerialManager):
         self.mqtt_client = mqtt_client
         self.cfg = port_cfg
         self.name = port_cfg["name"]
         self.topic_up = f"{port_cfg['mqtt_topic_prefix']}/up"
         self.topic_down = f"{port_cfg['mqtt_topic_prefix']}/down"
-        self.serial_conn: serial.Serial | None = None
+        self.mgr = mgr
         self._stop_event = threading.Event()
         self._read_thread: threading.Thread | None = None
 
     def open(self):
         """Open serial port and subscribe to the down topic."""
-        try:
-            self.serial_conn = serial.Serial(
-                port=self.cfg["port"],
-                baudrate=self.cfg["baudrate"],
-                bytesize=self.cfg["bytesize"],
-                parity=self.cfg["parity"],
-                stopbits=self.cfg["stopbits"],
-                timeout=self.cfg["timeout"],
-            )
-            logger.info("[%s] Serial port opened: %s @ %d baud",
-                        self.name, self.cfg["port"], self.cfg["baudrate"])
-        except serial.SerialException as e:
-            logger.error("[%s] Failed to open serial port %s: %s",
-                         self.name, self.cfg["port"], e)
-            raise
+        self.mgr.open()
 
         # Subscribe to MQTT down topic (MQTT -> serial)
         self.mqtt_client.subscribe(self.topic_down, qos=1)
@@ -74,49 +80,42 @@ class SerialBridge:
         """Continuously read from serial and publish to MQTT up topic."""
         while not self._stop_event.is_set():
             try:
-                if self.serial_conn and self.serial_conn.in_waiting > 0:
-                    data = self.serial_conn.read(self.serial_conn.in_waiting)
-                    if data:
-                        self.mqtt_client.publish(self.topic_up, data, qos=1)
-                        logger.debug("[%s] Serial -> MQTT (%d bytes): %s",
-                                     self.name, len(data), data.hex())
+                with self.mgr.lock():
+                    data = self.mgr.read_available()
+                if data:
+                    self.mqtt_client.publish(self.topic_up, data, qos=1)
+                    logger.debug("[%s] Serial -> MQTT (%d bytes): %s",
+                                 self.name, len(data), data.hex())
                 else:
                     time.sleep(0.01)
-            except serial.SerialException as e:
-                logger.error("[%s] Serial read error: %s", self.name, e)
-                self._stop_event.wait(1)
             except Exception as e:
-                logger.error("[%s] Unexpected error in read loop: %s", self.name, e)
+                logger.error("[%s] Read loop error: %s", self.name, e)
                 self._stop_event.wait(1)
 
     def write(self, data: bytes):
         """Write data received from MQTT to the serial port."""
-        if self.serial_conn and self.serial_conn.is_open:
-            try:
-                self.serial_conn.write(data)
-                logger.debug("[%s] MQTT -> Serial (%d bytes): %s",
-                             self.name, len(data), data.hex())
-            except serial.SerialException as e:
-                logger.error("[%s] Serial write error: %s", self.name, e)
+        try:
+            with self.mgr.lock():
+                self.mgr.write_raw(data)
+            logger.debug("[%s] MQTT -> Serial (%d bytes): %s",
+                         self.name, len(data), data.hex())
+        except Exception as e:
+            logger.error("[%s] Serial write error: %s", self.name, e)
 
     def close(self):
         self._stop_event.set()
         if self._read_thread:
             self._read_thread.join(timeout=2)
-        if self.serial_conn and self.serial_conn.is_open:
-            self.serial_conn.close()
-            logger.info("[%s] Serial port closed", self.name)
+        logger.info("[%s] Bridge stopped", self.name)
 
 
 class MQTTSerialServer:
-    """Main server coordinating MQTT client and serial bridges."""
+    """Coordinates MQTT client and serial bridges using shared SerialManagers."""
 
     def __init__(self, config: dict):
         self.config = config
         self.bridges: dict[str, SerialBridge] = {}
         self._stop_event = threading.Event()
-
-        # Build topic -> bridge lookup
         self._topic_bridge_map: dict[str, SerialBridge] = {}
 
         # Setup MQTT client
@@ -136,16 +135,17 @@ class MQTTSerialServer:
         self.mqtt_client.on_disconnect = self._on_disconnect
         self.mqtt_client.on_message = self._on_message
 
-        # Create bridges
+        # Create bridges using shared serial managers
         for port_cfg in config["serial_ports"]:
-            bridge = SerialBridge(self.mqtt_client, port_cfg)
-            self.bridges[bridge.name] = bridge
+            name = port_cfg["name"]
+            mgr = serial_managers[name]
+            bridge = SerialBridge(self.mqtt_client, port_cfg, mgr)
+            self.bridges[name] = bridge
             self._topic_bridge_map[bridge.topic_down] = bridge
 
     def _on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
             logger.info("Connected to MQTT broker via WebSocket")
-            # Open all serial ports and subscribe topics
             for bridge in self.bridges.values():
                 try:
                     bridge.open()
@@ -171,21 +171,26 @@ class MQTTSerialServer:
         ws_port = mqtt_cfg["ws_port"]
 
         logger.info("Connecting to MQTT broker at ws://%s:%d ...", broker, ws_port)
-        self.mqtt_client.connect(broker, ws_port, keepalive=mqtt_cfg["keepalive"])
-        self.mqtt_client.loop_start()
-
-        logger.info("Server started. Press Ctrl+C to stop.")
-        self._stop_event.wait()
+        try:
+            self.mqtt_client.connect(broker, ws_port, keepalive=mqtt_cfg["keepalive"])
+            self.mqtt_client.loop_start()
+            logger.info("MQTT WS bridge started.")
+        except Exception as e:
+            logger.warning("MQTT connection failed: %s (API service will still run)", e)
 
     def stop(self):
-        logger.info("Shutting down...")
+        logger.info("Stopping MQTT bridge...")
         for bridge in self.bridges.values():
             bridge.close()
         self.mqtt_client.loop_stop()
         self.mqtt_client.disconnect()
         self._stop_event.set()
-        logger.info("Server stopped.")
+        logger.info("MQTT bridge stopped.")
 
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
 
 def setup_logging(config: dict):
     log_cfg = config.get("logging", {})
@@ -212,22 +217,40 @@ def setup_logging(config: dict):
     logging.basicConfig(level=level, handlers=handlers)
 
 
+# ---------------------------------------------------------------------------
+# Main — start both MQTT WS bridge + FastAPI in one process
+# ---------------------------------------------------------------------------
+
 def main():
     config = load_config()
     setup_logging(config)
 
-    server = MQTTSerialServer(config)
+    # 1. Create shared serial managers (one per port)
+    for port_cfg in config["serial_ports"]:
+        name = port_cfg["name"]
+        mgr = create_serial_manager(port_cfg)
+        serial_managers[name] = mgr
+        logger.info("SerialManager created for %s (%s)", name, port_cfg["port"])
+
+    # 2. Start MQTT WS transparent bridge (non-blocking)
+    mqtt_server = MQTTSerialServer(config)
+    mqtt_server.start()
+
+    # 3. Import and start FastAPI (blocking — runs uvicorn)
+    from meter_api import app  # noqa: import here to use shared serial_managers
 
     def _signal_handler(sig, frame):
-        server.stop()
+        mqtt_server.stop()
+        for mgr in serial_managers.values():
+            mgr.close()
+        sys.exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    try:
-        server.start()
-    except KeyboardInterrupt:
-        server.stop()
+    logger.info("Starting API service on http://0.0.0.0:8000 ...")
+    logger.info("API docs: http://localhost:8000/docs")
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
 
 
 if __name__ == "__main__":

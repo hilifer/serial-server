@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "============================================"
-echo "  MQTT WebSocket Serial Transparent Server"
+echo "  Unified Serial Server (MQTT WS + API)"
 echo "============================================"
 echo ""
 
@@ -26,7 +26,9 @@ echo "Installing dependencies..."
 pip install -r requirements.txt -q
 echo ""
 
-# Start server
-echo "[3/3] Starting server..."
+# Start unified server (MQTT WS bridge + Meter API)
+echo "[3/3] Starting unified server..."
+echo "  MQTT WS bridge: serial/comXX/up, serial/comXX/down"
+echo "  Meter API: http://localhost:8000/docs"
 echo "============================================"
 python3 server.py
