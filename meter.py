@@ -185,6 +185,26 @@ DJSF_REALTIME = {
     "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),
 }
 
+# Batch read groups for DJSF — read contiguous registers in one request
+# to avoid inter-frame timing issues with slower meters.
+#   Group 1: reg 5, count 1 → temperature
+#   Group 2: reg 12, count 4 → energy_forward(12-13) + energy_reverse(14-15)
+#   Group 3: reg 50, count 6 → voltage(50-51) + current(52-53) + power(54-55)
+DJSF_BATCH_READS = [
+    {"start": 5, "count": 1, "fields": [
+        ("temperature", RegisterDef(5, 1, "int16", 0.1, "°C"), 0),
+    ]},
+    {"start": 12, "count": 4, "fields": [
+        ("energy_forward_total", RegisterDef(12, 2, "uint32", 0.0001, "kWh"), 0),
+        ("energy_reverse_total", RegisterDef(14, 2, "uint32", 0.0001, "kWh"), 4),
+    ]},
+    {"start": 50, "count": 6, "fields": [
+        ("voltage", RegisterDef(50, 2, "float", 1.0, "V"), 0),
+        ("current", RegisterDef(52, 2, "float", 1.0, "A"), 4),
+        ("power",   RegisterDef(54, 2, "float", 1.0, "kW"), 8),
+    ]},
+]
+
 # DJSF monthly energy (Modbus): base address 2000 area
 # Current month total forward: addr 2010-2011 (2 regs, unit Wh)
 # Month 1~12 forward total: addr 2020 + (month-1)*10 for 2 regs each
