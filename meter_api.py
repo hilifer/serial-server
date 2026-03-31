@@ -21,7 +21,8 @@ from flask import Flask, jsonify, request, abort
 
 from meter import (
     MeterType, MeterInfo, METERS, METER_BY_ADDR,
-    ADL400_REALTIME, DJSF_REALTIME, DJSF_BATCH_READS, DJSF_MONTHLY_MAX,
+    ADL400_REALTIME, ADL400_BATCH_READS,
+    DJSF_REALTIME, DJSF_BATCH_READS, DJSF_MONTHLY_MAX,
     build_read_request, parse_read_response, parse_register_value,
     build_daily_history_request,
     build_monthly_history_request_adl400,
@@ -128,42 +129,26 @@ def get_realtime(addr: int):
 
     results = {}
 
-    if meter.meter_type == MeterType.ADL400:
-        # ADL400: read each register individually (fast response)
-        with ser.lock():
-            for name, rdef in ADL400_REALTIME.items():
-                req = build_read_request(meter.slave_addr, rdef.address, rdef.count)
-                response = ser.send_and_receive_unlocked(req)
-                if not response:
-                    results[name] = {"value": None, "unit": rdef.unit, "error": "no response"}
-                    continue
-                data = parse_read_response(response)
-                if data is None:
-                    results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
-                    continue
-                value = parse_register_value(data, rdef)
-                results[name] = {"value": value, "unit": rdef.unit}
-    else:
-        # DJSF: batch read contiguous registers to avoid timing issues.
-        # 3 requests instead of 6, much more reliable.
-        with ser.lock():
-            for batch in DJSF_BATCH_READS:
-                req = build_read_request(meter.slave_addr, batch["start"], batch["count"])
-                response = ser.send_and_receive_unlocked(req)
-                data = parse_read_response(response) if response else None
+    batch_list = ADL400_BATCH_READS if meter.meter_type == MeterType.ADL400 else DJSF_BATCH_READS
 
-                for name, rdef, offset in batch["fields"]:
-                    if data is None:
+    with ser.lock():
+        for batch in batch_list:
+            req = build_read_request(meter.slave_addr, batch["start"], batch["count"])
+            response = ser.send_and_receive_unlocked(req)
+            data = parse_read_response(response) if response else None
+
+            for name, rdef, offset in batch["fields"]:
+                if data is None:
+                    results[name] = {"value": None, "unit": rdef.unit,
+                                     "error": "no response" if not response else "parse error"}
+                else:
+                    try:
+                        value = parse_register_value(
+                            data[offset:offset + rdef.count * 2], rdef)
+                        results[name] = {"value": value, "unit": rdef.unit}
+                    except Exception:
                         results[name] = {"value": None, "unit": rdef.unit,
-                                         "error": "no response" if not response else "parse error"}
-                    else:
-                        try:
-                            value = parse_register_value(
-                                data[offset:offset + rdef.count * 2], rdef)
-                            results[name] = {"value": value, "unit": rdef.unit}
-                        except Exception:
-                            results[name] = {"value": None, "unit": rdef.unit,
-                                             "error": "parse error"}
+                                         "error": "parse error"}
 
     return jsonify({
         "address": addr,

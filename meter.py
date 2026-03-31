@@ -150,6 +150,55 @@ ADL400_REALTIME = {
     "energy_combined_total": RegisterDef(0x0000, 2, "uint32", 0.01, "kWh"),
 }
 
+# Batch read groups for ADL400 — read contiguous registers in one request.
+#   Group 1: reg 0x0000, count 2  → energy_combined_total
+#   Group 2: reg 0x000A, count 2  → energy_forward_total
+#   Group 3: reg 0x0014, count 2  → energy_reverse_total
+#   Group 4: reg 0x0061, count 6  → voltage_a/b/c + current_a/b/c
+#   Group 5: reg 0x0077, count 1  → frequency
+#   Group 6: reg 0x0164, count 8  → power_a/b/c/total (0x0164-0x016B)
+#   Group 7: reg 0x0172, count 2  → reactive_power_total
+#   Group 8: reg 0x017A, count 2  → apparent_power_total
+#   Group 9: reg 0x017F, count 1  → power_factor
+# Total: 9 requests instead of 17
+ADL400_BATCH_READS = [
+    {"start": 0x0000, "count": 2, "fields": [
+        ("energy_combined_total", RegisterDef(0x0000, 2, "uint32", 0.01, "kWh"), 0),
+    ]},
+    {"start": 0x000A, "count": 2, "fields": [
+        ("energy_forward_total", RegisterDef(0x000A, 2, "uint32", 0.01, "kWh"), 0),
+    ]},
+    {"start": 0x0014, "count": 2, "fields": [
+        ("energy_reverse_total", RegisterDef(0x0014, 2, "uint32", 0.01, "kWh"), 0),
+    ]},
+    {"start": 0x0061, "count": 6, "fields": [
+        ("voltage_a", RegisterDef(0x0061, 1, "uint16", 0.1, "V"), 0),
+        ("voltage_b", RegisterDef(0x0062, 1, "uint16", 0.1, "V"), 2),
+        ("voltage_c", RegisterDef(0x0063, 1, "uint16", 0.1, "V"), 4),
+        ("current_a", RegisterDef(0x0064, 1, "uint16", 0.01, "A"), 6),
+        ("current_b", RegisterDef(0x0065, 1, "uint16", 0.01, "A"), 8),
+        ("current_c", RegisterDef(0x0066, 1, "uint16", 0.01, "A"), 10),
+    ]},
+    {"start": 0x0077, "count": 1, "fields": [
+        ("frequency", RegisterDef(0x0077, 1, "uint16", 0.01, "Hz"), 0),
+    ]},
+    {"start": 0x0164, "count": 8, "fields": [
+        ("power_a",     RegisterDef(0x0164, 2, "int32", 0.001, "kW"), 0),
+        ("power_b",     RegisterDef(0x0166, 2, "int32", 0.001, "kW"), 4),
+        ("power_c",     RegisterDef(0x0168, 2, "int32", 0.001, "kW"), 8),
+        ("power_total", RegisterDef(0x016A, 2, "int32", 0.001, "kW"), 12),
+    ]},
+    {"start": 0x0172, "count": 2, "fields": [
+        ("reactive_power_total", RegisterDef(0x0172, 2, "int32", 0.001, "kvar"), 0),
+    ]},
+    {"start": 0x017A, "count": 2, "fields": [
+        ("apparent_power_total", RegisterDef(0x017A, 2, "int32", 0.001, "kVA"), 0),
+    ]},
+    {"start": 0x017F, "count": 1, "fields": [
+        ("power_factor", RegisterDef(0x017F, 1, "int16", 0.001, ""), 0),
+    ]},
+]
+
 # ADL400 daily history: base 0x6000, stride 0x22, up to 90 days
 # Each block: 34 registers
 #   offset 0-1: freeze time (year-month, day-hour)
