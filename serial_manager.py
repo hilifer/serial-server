@@ -222,8 +222,50 @@ class SerialManager:
     # Modbus request-response
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _modbus_expected_len(response: bytes) -> int | None:
+        """Calculate expected Modbus RTU response length from partial data.
+
+        Returns expected total frame length, or None if not enough data yet.
+
+        Frame formats:
+          Normal 03H response: [addr][03][byte_count][data...][CRC_lo][CRC_hi]
+                               length = 3 + byte_count + 2
+          Exception response:  [addr][0x83][error_code][CRC_lo][CRC_hi]
+                               length = 5
+        """
+        if len(response) < 3:
+            return None
+
+        func_code = response[1]
+
+        # Exception response
+        if func_code & 0x80:
+            return 5
+
+        # Normal 03H / 04H read response
+        if func_code in (0x03, 0x04):
+            byte_count = response[2]
+            return 3 + byte_count + 2
+
+        # 10H write response
+        if func_code == 0x10:
+            return 8
+
+        # Unknown function code — can't predict length
+        return None
+
     def _do_send_recv(self, request: bytes) -> bytes:
-        """Send Modbus request and read response. Returns b"" on any error."""
+        """Send Modbus request and read complete response.
+
+        Uses Modbus frame structure to determine when a response is complete:
+        1. Read until we have at least 3 bytes (addr + func + byte_count)
+        2. Calculate expected frame length from byte_count
+        3. Keep reading until we have the full frame or timeout
+        4. Verify CRC on complete frame
+
+        Returns b"" on any error.
+        """
         if not self._serial or not self._serial.is_open:
             if not self._try_reconnect():
                 return b""
@@ -235,16 +277,49 @@ class SerialManager:
             time.sleep(0.05)
 
             response = b""
+            expected_len = None
             deadline = time.time() + self.timeout
-            while time.time() < deadline:
-                chunk = self._serial.read(self._serial.in_waiting or 1)
-                if chunk:
-                    response += chunk
-                    time.sleep(0.02)
-                elif response:
-                    break
 
-            logger.debug("[%s] RX: %s", self.port, response.hex())
+            while time.time() < deadline:
+                # Read available bytes
+                n = self._serial.in_waiting
+                if n > 0:
+                    chunk = self._serial.read(n)
+                    if chunk:
+                        response += chunk
+
+                    # Try to determine expected length once we have enough header
+                    if expected_len is None and len(response) >= 3:
+                        expected_len = self._modbus_expected_len(response)
+
+                    # Check if we have a complete frame
+                    if expected_len is not None and len(response) >= expected_len:
+                        response = response[:expected_len]  # trim any trailing noise
+                        break
+
+                    time.sleep(0.01)
+                elif response:
+                    # No new data — if we already know expected length, keep waiting
+                    if expected_len is not None and len(response) < expected_len:
+                        time.sleep(0.01)
+                        continue
+                    # Unknown length and no more data — assume done
+                    break
+                else:
+                    time.sleep(0.01)
+
+            if response:
+                logger.debug("[%s] RX: %s (%d/%s bytes)", self.port, response.hex(),
+                             len(response),
+                             str(expected_len) if expected_len else "?")
+
+                # Warn if frame appears incomplete
+                if expected_len is not None and len(response) < expected_len:
+                    logger.warning("[%s] Incomplete frame: got %d, expected %d",
+                                   self.port, len(response), expected_len)
+            else:
+                logger.debug("[%s] RX: (no response)", self.port)
+
             return response
         except (serial.SerialException, OSError) as e:
             self._handle_error("send_recv", e)

@@ -76,11 +76,29 @@ class SerialBridge:
         self._read_thread.start()
 
     def _read_loop(self):
-        """Continuously read from serial and publish to MQTT up topic."""
+        """Continuously read from serial and publish to MQTT up topic.
+
+        Uses inter-frame gap detection: after receiving data, waits briefly
+        for more bytes. If no new data arrives within the gap time, considers
+        the frame complete and publishes it as one MQTT message.
+        """
+        # Modbus RTU inter-frame gap: 3.5 char times at 9600 baud ~ 3.6ms
+        # Use 5ms as a safe gap threshold
+        frame_gap = 0.005
+
         while not self._stop_event.is_set():
             try:
                 with self.mgr.lock():
                     data = self.mgr.read_available()
+                    if data:
+                        # Got some data — keep reading until frame gap detected
+                        while True:
+                            time.sleep(frame_gap)
+                            more = self.mgr.read_available()
+                            if more:
+                                data += more
+                            else:
+                                break
                 if data:
                     self.mqtt_client.publish(self.topic_up, data, qos=1)
                     logger.debug("[%s] Serial -> MQTT (%d bytes): %s",
