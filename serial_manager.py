@@ -266,6 +266,7 @@ class SerialManager:
         """Send request and read complete response.
 
         Uses frame structure to determine when a response is complete.
+        Validates response header matches the request (slave address).
         protocol: "modbus" or "parking"
 
         Returns b"" on any error.
@@ -274,17 +275,25 @@ class SerialManager:
             if not self._try_reconnect():
                 return b""
         try:
+            # Modbus RTU inter-frame gap: wait for bus to be quiet
+            time.sleep(0.01)
             self._serial.reset_input_buffer()
             self._serial.write(request)
             logger.debug("[%s] TX: %s", self.port, request.hex())
 
+            # Wait for slave to start responding
             time.sleep(0.05)
 
             response = b""
             expected_len = None
-            # Parking protocol needs 5 bytes for header, Modbus needs 3
             min_header = 5 if protocol == "parking" else 3
             deadline = time.time() + self.timeout
+
+            # Expected slave address from request
+            if protocol == "modbus":
+                expected_addr = request[0]  # Modbus: first byte is slave addr
+            else:
+                expected_addr = request[1]  # Parking: second byte is slave addr
 
             while time.time() < deadline:
                 n = self._serial.in_waiting
@@ -292,6 +301,19 @@ class SerialManager:
                     chunk = self._serial.read(n)
                     if chunk:
                         response += chunk
+
+                    # Validate response header - discard bytes until we see
+                    # the expected slave address at the correct position
+                    if protocol == "modbus" and len(response) >= 1:
+                        if response[0] != expected_addr:
+                            # Discard mismatched leading bytes (leftover from prev frame)
+                            idx = response.find(bytes([expected_addr]))
+                            if idx > 0:
+                                logger.debug("[%s] Discarding %d leading bytes",
+                                             self.port, idx)
+                                response = response[idx:]
+                            elif idx < 0:
+                                response = b""
 
                     if expected_len is None and len(response) >= min_header:
                         expected_len = self._expected_response_len(response, protocol)
