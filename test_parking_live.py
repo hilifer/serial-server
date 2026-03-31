@@ -13,23 +13,12 @@ Usage:
 """
 
 import argparse
-import subprocess
 import sys
 import time
 from pathlib import Path
 
-
-def ensure_deps():
-    try:
-        import serial  # noqa
-    except ImportError:
-        print("Installing pyserial ...")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pyserial", "-q"],
-            stdout=subprocess.DEVNULL,
-        )
-
-
+sys.path.insert(0, str(Path(__file__).parent))
+from deps import ensure_deps
 ensure_deps()
 
 import serial

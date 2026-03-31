@@ -16,25 +16,13 @@ Usage:
 
 import argparse
 import struct
-import subprocess
 import sys
 import time
 import logging
 from pathlib import Path
 
-
-def ensure_deps():
-    """Auto-install dependencies if missing."""
-    try:
-        import serial  # noqa
-    except ImportError:
-        print("Installing missing dependency: pyserial ...")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "pyserial", "-q"],
-            stdout=subprocess.DEVNULL,
-        )
-
-
+sys.path.insert(0, str(Path(__file__).parent))
+from deps import ensure_deps
 ensure_deps()
 
 import serial

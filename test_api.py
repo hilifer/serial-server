@@ -14,23 +14,12 @@ Usage:
 """
 
 import argparse
-import subprocess
 import sys
-import json
 import time
+from pathlib import Path
 
-
-def ensure_deps():
-    try:
-        import requests  # noqa
-    except ImportError:
-        print("Installing requests ...")
-        subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "requests", "-q"],
-            stdout=subprocess.DEVNULL,
-        )
-
-
+sys.path.insert(0, str(Path(__file__).parent))
+from deps import ensure_deps
 ensure_deps()
 
 import requests
