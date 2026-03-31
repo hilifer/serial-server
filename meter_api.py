@@ -47,7 +47,7 @@ app = Flask(__name__)
 
 def get_serial():
     """Get the shared SerialManager for COM33 from server.serial_managers."""
-    from server import serial_managers
+    from state import serial_managers
     mgr = serial_managers.get("COM33")
     if mgr is None:
         abort(500, description="COM33 SerialManager not initialized")
@@ -95,7 +95,7 @@ def add_cors_headers(response):
 @app.get("/status")
 def get_status():
     """Get serial port status for all ports."""
-    from server import serial_managers
+    from state import serial_managers
     return jsonify({
         "ports": {
             name: mgr.get_status_info()
@@ -351,7 +351,7 @@ def get_yearly(addr: int):
 # ===========================================================================
 
 def get_parking_serial(com_port: str):
-    from server import serial_managers
+    from state import serial_managers
     mgr = serial_managers.get(com_port)
     if mgr is None:
         abort(500, description=f"{com_port} SerialManager not initialized")
@@ -388,7 +388,7 @@ def list_parking_spaces():
 @app.get("/parking/status")
 def get_all_parking_status():
     """Poll parking spaces. Query: ?zone=A or ?zone=B"""
-    from server import serial_managers
+    from state import serial_managers
     zone = request.args.get("zone", "").upper()
 
     spaces = PARKING_SPACES
@@ -502,7 +502,7 @@ def set_parking_color(space_id: int):
 
 @app.get("/parking/summary")
 def get_parking_summary():
-    from server import serial_managers
+    from state import serial_managers
 
     summary = {"A": {"total": 27, "occupied": 0, "empty": 0, "offline": 0},
                "B": {"total": 27, "occupied": 0, "empty": 0, "offline": 0}}

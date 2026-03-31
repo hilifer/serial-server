@@ -32,14 +32,10 @@ def load_config(path: str = "config.yaml") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Global registry: port name -> SerialManager (shared across MQTT + API)
+# Global registry: use state.py to avoid __main__ vs module import issue
 # ---------------------------------------------------------------------------
 
-serial_managers: dict[str, SerialManager] = {}
-
-
-def get_serial_manager(name: str) -> SerialManager | None:
-    return serial_managers.get(name)
+from state import serial_managers
 
 
 # ---------------------------------------------------------------------------

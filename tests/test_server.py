@@ -377,11 +377,8 @@ class TestSerialManagerShared:
         assert isinstance(server_module.serial_managers, dict)
 
     def test_get_serial_manager(self):
-        mgr = server_module.get_serial_manager("COM31")
+        mgr = server_module.serial_managers.get("COM31")
         assert mgr is not None
 
     def test_get_serial_manager_missing(self):
-        original = server_module.serial_managers.copy()
-        server_module.serial_managers.clear()
-        assert server_module.get_serial_manager("COM99") is None
-        server_module.serial_managers.update(original)
+        assert server_module.serial_managers.get("COM99") is None
