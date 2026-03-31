@@ -57,6 +57,12 @@ def get_serial():
     mgr = serial_managers.get("COM33")
     if mgr is None:
         raise HTTPException(500, "COM33 SerialManager not initialized")
+    if not mgr.is_open:
+        raise HTTPException(
+            503,
+            f"COM33 serial port unavailable: {mgr.last_error or 'not connected'} "
+            "(auto-reconnect is running)"
+        )
     return mgr
 
 
@@ -70,6 +76,18 @@ def get_meter(addr: int) -> MeterInfo:
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/status")
+def get_status():
+    """Get serial port status for all ports."""
+    from server import serial_managers
+    return {
+        "ports": {
+            name: mgr.get_status_info()
+            for name, mgr in serial_managers.items()
+        }
+    }
+
 
 @app.get("/meters")
 def list_meters():

@@ -4,13 +4,14 @@ import threading
 from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
+import serial
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from serial_manager import SerialManager, create_serial_manager
+from serial_manager import SerialManager, PortStatus, create_serial_manager
 
 
 # ---------------------------------------------------------------------------
@@ -53,7 +54,8 @@ class TestSerialManagerInit:
 class TestSerialManagerOpenClose:
     @patch("serial_manager.serial.Serial")
     def test_open_creates_connection(self, mock_serial_cls, mgr):
-        mgr.open()
+        result = mgr.open()
+        assert result is True
         mock_serial_cls.assert_called_once_with(
             port="COM33",
             baudrate=9600,
@@ -72,10 +74,12 @@ class TestSerialManagerOpenClose:
 
     @patch("serial_manager.serial.Serial")
     def test_close(self, mock_serial_cls, mgr):
-        mock_serial_cls.return_value.is_open = True
+        mock_conn = mock_serial_cls.return_value
+        mock_conn.is_open = True
         mgr.open()
         mgr.close()
-        mgr._serial.close.assert_called_once()
+        mock_conn.close.assert_called_once()
+        assert mgr._serial is None
 
     def test_close_when_not_open(self, mgr):
         mgr.close()  # should not raise
@@ -235,3 +239,180 @@ class TestCreateSerialManager:
         assert mgr.parity == "N"
         assert mgr.stopbits == 1
         assert mgr.timeout == 0.5
+
+
+# ---------------------------------------------------------------------------
+# Tests: error handling and reconnect
+# ---------------------------------------------------------------------------
+
+class TestSerialManagerErrorHandling:
+    def test_initial_status_disconnected(self, mgr):
+        assert mgr.status == PortStatus.DISCONNECTED
+
+    @patch("serial_manager.serial.Serial")
+    def test_open_success_sets_connected(self, mock_serial_cls, mgr):
+        result = mgr.open()
+        assert result is True
+        assert mgr.status == PortStatus.CONNECTED
+        assert mgr.last_error == ""
+
+    @patch("serial_manager.serial.Serial",
+           side_effect=serial.SerialException("port busy"))
+    def test_open_failure_sets_error(self, mock_serial_cls, mgr):
+        import serial
+        result = mgr.open()
+        assert result is False
+        assert mgr.status == PortStatus.ERROR
+        assert "port busy" in mgr.last_error
+
+    @patch("serial_manager.serial.Serial",
+           side_effect=OSError("permission denied"))
+    def test_open_os_error_sets_error(self, mock_serial_cls, mgr):
+        result = mgr.open()
+        assert result is False
+        assert mgr.status == PortStatus.ERROR
+        assert "permission denied" in mgr.last_error
+
+    @patch("serial_manager.serial.Serial",
+           side_effect=serial.SerialException("port busy"))
+    def test_open_failure_does_not_raise(self, mock_serial_cls, mgr):
+        import serial
+        # Should NOT raise, just return False
+        result = mgr.open()
+        assert result is False
+
+    def test_read_available_returns_empty_when_disconnected(self, mgr):
+        assert mgr.read_available() == b""
+
+    def test_write_raw_returns_false_when_disconnected(self, mgr):
+        result = mgr.write_raw(b"\x01\x02")
+        assert result is False
+
+    def test_send_and_receive_returns_empty_when_disconnected(self, mgr):
+        resp = mgr.send_and_receive(b"\x01\x03\x00\x00\x00\x01")
+        assert resp == b""
+
+    @patch("serial_manager.serial.Serial")
+    def test_read_error_sets_error_status(self, mock_serial_cls, mgr):
+        import serial
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        type(mock_conn).in_waiting = PropertyMock(
+            side_effect=serial.SerialException("device disconnected"))
+        mgr._serial = mock_conn
+        mgr._status = PortStatus.CONNECTED
+
+        data = mgr.read_available()
+        assert data == b""
+        assert mgr.status == PortStatus.ERROR
+        assert "device disconnected" in mgr.last_error
+
+    @patch("serial_manager.serial.Serial")
+    def test_write_error_sets_error_status(self, mock_serial_cls, mgr):
+        import serial
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        mock_conn.write.side_effect = serial.SerialException("write failed")
+        mgr._serial = mock_conn
+        mgr._status = PortStatus.CONNECTED
+
+        result = mgr.write_raw(b"\x01")
+        assert result is False
+        assert mgr.status == PortStatus.ERROR
+
+    @patch("serial_manager.serial.Serial")
+    def test_send_recv_error_returns_empty(self, mock_serial_cls, mgr):
+        import serial
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        mock_conn.write.side_effect = serial.SerialException("IO error")
+        mgr._serial = mock_conn
+        mgr._status = PortStatus.CONNECTED
+
+        resp = mgr.send_and_receive(b"\x01\x03\x00\x00\x00\x01")
+        assert resp == b""
+        assert mgr.status == PortStatus.ERROR
+
+    @patch("serial_manager.serial.Serial")
+    def test_error_closes_broken_connection(self, mock_serial_cls, mgr):
+        import serial
+        mock_conn = MagicMock()
+        mock_conn.is_open = True
+        mock_conn.write.side_effect = serial.SerialException("broken")
+        mgr._serial = mock_conn
+
+        mgr.write_raw(b"\x01")
+        assert mgr._serial is None  # broken connection cleaned up
+
+
+class TestSerialManagerReconnect:
+    @patch("serial_manager.serial.Serial")
+    def test_try_reconnect_after_error(self, mock_serial_cls, mgr):
+        mgr._status = PortStatus.ERROR
+        mgr._serial = None
+        mgr._last_reconnect_attempt = 0  # force immediate retry
+
+        result = mgr._try_reconnect()
+        assert result is True
+        assert mgr.status == PortStatus.CONNECTED
+
+    def test_try_reconnect_respects_interval(self, mgr):
+        import time
+        mgr._status = PortStatus.ERROR
+        mgr._serial = None
+        mgr._last_reconnect_attempt = time.time()  # just tried
+
+        result = mgr._try_reconnect()
+        assert result is False  # too soon
+
+    @patch("serial_manager.serial.Serial")
+    def test_write_raw_auto_reconnects(self, mock_serial_cls, mgr):
+        """write_raw should try to reconnect if port is closed."""
+        mgr._serial = None
+        mgr._last_reconnect_attempt = 0
+
+        result = mgr.write_raw(b"\x01\x02")
+        assert result is True
+        mock_serial_cls.assert_called_once()
+
+    @patch("serial_manager.serial.Serial")
+    def test_send_recv_auto_reconnects(self, mock_serial_cls, mgr):
+        mock_conn = mock_serial_cls.return_value
+        mock_conn.is_open = True
+        mock_conn.read.return_value = b""
+        mock_conn.in_waiting = 0
+        mgr._serial = None
+        mgr._last_reconnect_attempt = 0
+
+        resp = mgr.send_and_receive(b"\x01")
+        # Should have reconnected and attempted to send
+        mock_serial_cls.assert_called_once()
+        mock_conn.write.assert_called_once()
+
+    def test_get_status_info(self, mgr):
+        info = mgr.get_status_info()
+        assert info["port"] == "COM33"
+        assert info["status"] == "disconnected"
+        assert info["is_open"] is False
+        assert info["baudrate"] == 9600
+
+    @patch("serial_manager.serial.Serial",
+           side_effect=serial.SerialException("busy"))
+    def test_get_status_info_after_error(self, mock_serial_cls, mgr):
+        import serial
+        mgr.open()
+        info = mgr.get_status_info()
+        assert info["status"] == "error"
+        assert "busy" in info["last_error"]
+
+    @patch("serial_manager.serial.Serial")
+    def test_reconnect_loop_starts_and_stops(self, mock_serial_cls, mgr):
+        import time
+        mgr.reconnect_interval = 0.1
+        mgr.start_reconnect_loop()
+        assert mgr._reconnect_thread is not None
+        assert mgr._reconnect_thread.is_alive()
+
+        mgr.close()
+        time.sleep(0.2)
+        assert not mgr._reconnect_thread or not mgr._reconnect_thread.is_alive()

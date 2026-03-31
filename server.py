@@ -230,7 +230,16 @@ def main():
         name = port_cfg["name"]
         mgr = create_serial_manager(port_cfg)
         serial_managers[name] = mgr
-        logger.info("SerialManager created for %s (%s)", name, port_cfg["port"])
+
+        # Try initial open (non-fatal if it fails)
+        if mgr.open():
+            logger.info("SerialManager [%s] (%s): connected", name, port_cfg["port"])
+        else:
+            logger.warning("SerialManager [%s] (%s): unavailable, will auto-reconnect",
+                           name, port_cfg["port"])
+
+        # Start background reconnect loop
+        mgr.start_reconnect_loop()
 
     # 2. Start MQTT WS transparent bridge (non-blocking)
     mqtt_server = MQTTSerialServer(config)
