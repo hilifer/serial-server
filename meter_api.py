@@ -129,26 +129,21 @@ def get_realtime(addr: int):
 
     results = {}
 
-    batch_list = ADL400_BATCH_READS if meter.meter_type == MeterType.ADL400 else DJSF_BATCH_READS
+    regs = ADL400_REALTIME if meter.meter_type == MeterType.ADL400 else DJSF_REALTIME
 
     with ser.lock():
-        for batch in batch_list:
-            req = build_read_request(meter.slave_addr, batch["start"], batch["count"])
+        for name, rdef in regs.items():
+            req = build_read_request(meter.slave_addr, rdef.address, rdef.count)
             response = ser.send_and_receive_unlocked(req)
-            data = parse_read_response(response) if response else None
-
-            for name, rdef, offset in batch["fields"]:
-                if data is None:
-                    results[name] = {"value": None, "unit": rdef.unit,
-                                     "error": "no response" if not response else "parse error"}
-                else:
-                    try:
-                        value = parse_register_value(
-                            data[offset:offset + rdef.count * 2], rdef)
-                        results[name] = {"value": value, "unit": rdef.unit}
-                    except Exception:
-                        results[name] = {"value": None, "unit": rdef.unit,
-                                         "error": "parse error"}
+            if not response:
+                results[name] = {"value": None, "unit": rdef.unit, "error": "no response"}
+                continue
+            data = parse_read_response(response)
+            if data is None:
+                results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
+                continue
+            value = parse_register_value(data, rdef)
+            results[name] = {"value": value, "unit": rdef.unit}
 
     return jsonify({
         "address": addr,

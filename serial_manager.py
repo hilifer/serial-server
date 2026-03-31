@@ -275,14 +275,19 @@ class SerialManager:
             if not self._try_reconnect():
                 return b""
         try:
-            # Modbus RTU inter-frame gap: wait for bus to be quiet
-            time.sleep(0.01)
+            # Inter-frame gap: flush any leftover bytes from previous response,
+            # then wait for bus to be quiet before sending new request.
+            time.sleep(0.05)
+            # Drain any stale bytes still arriving
+            while self._serial.in_waiting > 0:
+                self._serial.read(self._serial.in_waiting)
+                time.sleep(0.02)
             self._serial.reset_input_buffer()
             self._serial.write(request)
             logger.debug("[%s] TX: %s", self.port, request.hex())
 
             # Wait for slave to start responding
-            time.sleep(0.05)
+            time.sleep(0.08)
 
             response = b""
             expected_len = None

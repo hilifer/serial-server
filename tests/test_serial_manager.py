@@ -153,13 +153,17 @@ class TestSerialManagerModbus:
         mock_conn = MagicMock()
         mock_conn.is_open = True
         expected = b"\x01\x03\x02\x00\x00\xB8\x44"
-        # First read returns data, second read returns empty to break loop
         mock_conn.read.side_effect = [expected, b""]
-        call_count = 0
+        # in_waiting: 0 for drain loop, then 7 for actual data, then 0 to stop
+        drain_done = False
         def fake_in_waiting():
-            nonlocal call_count
-            call_count += 1
-            return 7 if call_count == 1 else 0
+            nonlocal drain_done
+            if not drain_done:
+                drain_done = True
+                return 0  # drain loop sees nothing
+            # After write: first call returns data size, then 0
+            fake_in_waiting.read_count = getattr(fake_in_waiting, 'read_count', 0) + 1
+            return 7 if fake_in_waiting.read_count == 1 else 0
         type(mock_conn).in_waiting = PropertyMock(side_effect=fake_in_waiting)
         mgr._serial = mock_conn
 
@@ -172,11 +176,14 @@ class TestSerialManagerModbus:
         mock_conn = MagicMock()
         mock_conn.is_open = True
         mock_conn.read.side_effect = [b"reply", b""]
-        call_count = 0
+        drain_done = False
         def fake_in_waiting():
-            nonlocal call_count
-            call_count += 1
-            return 5 if call_count == 1 else 0
+            nonlocal drain_done
+            if not drain_done:
+                drain_done = True
+                return 0
+            fake_in_waiting.read_count = getattr(fake_in_waiting, 'read_count', 0) + 1
+            return 5 if fake_in_waiting.read_count == 1 else 0
         type(mock_conn).in_waiting = PropertyMock(side_effect=fake_in_waiting)
         mgr._serial = mock_conn
 
@@ -325,6 +332,7 @@ class TestSerialManagerErrorHandling:
         import serial
         mock_conn = MagicMock()
         mock_conn.is_open = True
+        type(mock_conn).in_waiting = PropertyMock(return_value=0)
         mock_conn.write.side_effect = serial.SerialException("IO error")
         mgr._serial = mock_conn
         mgr._status = PortStatus.CONNECTED
