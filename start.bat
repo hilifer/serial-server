@@ -27,7 +27,7 @@ if not exist "venv" (
 call venv\Scripts\activate.bat
 
 echo Installing dependencies...
-pip install -r requirements.txt -q
+pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
 echo.
 
 REM Start unified server (MQTT WS bridge + Meter API)

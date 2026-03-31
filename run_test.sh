@@ -19,7 +19,7 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 source venv/bin/activate
-pip install -r requirements.txt -q
+pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
 echo ""
 
 echo "[3/3] Running unit tests..."

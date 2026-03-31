@@ -23,7 +23,7 @@ fi
 source venv/bin/activate
 
 echo "Installing dependencies..."
-pip install -r requirements.txt -q
+pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
 echo ""
 
 # Start unified server (MQTT WS bridge + Meter API)
