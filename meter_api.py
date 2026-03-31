@@ -44,13 +44,21 @@ logger = logging.getLogger("meter-api")
 # ---------------------------------------------------------------------------
 
 class SerialManager:
-    """Thread-safe serial port manager for Modbus RTU communication."""
+    """Thread-safe serial port manager for Modbus RTU communication.
+
+    Supports two usage patterns:
+      1. Single request: ser.send_and_receive(frame) — auto locks per call.
+      2. Batch requests: with ser.lock():
+             ser.send_and_receive_unlocked(frame1)
+             ser.send_and_receive_unlocked(frame2)
+         — holds the lock for the entire batch, preventing interleaving.
+    """
 
     def __init__(self, port: str, baudrate: int = 9600, timeout: float = 0.5):
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._serial: serial.Serial | None = None
 
     def open(self):
@@ -71,35 +79,50 @@ class SerialManager:
             self._serial.close()
             logger.info("Serial port %s closed", self.port)
 
-    def send_and_receive(self, request: bytes, expected_len: int = 256) -> bytes:
-        """Send a Modbus request and wait for response.
+    def lock(self):
+        """Return the RLock as a context manager for batch operations.
 
-        Thread-safe: only one request at a time.
+        Usage:
+            with ser.lock():
+                ser.send_and_receive_unlocked(req1)
+                ser.send_and_receive_unlocked(req2)
         """
+        return self._lock
+
+    def _do_send_recv(self, request: bytes) -> bytes:
+        """Internal: send request and read response (caller must hold lock)."""
+        if not self._serial or not self._serial.is_open:
+            self.open()
+        self._serial.reset_input_buffer()
+        self._serial.write(request)
+        logger.debug("TX: %s", request.hex())
+
+        time.sleep(0.05)
+
+        response = b""
+        deadline = time.time() + self.timeout
+        while time.time() < deadline:
+            chunk = self._serial.read(self._serial.in_waiting or 1)
+            if chunk:
+                response += chunk
+                time.sleep(0.02)
+            elif response:
+                break
+
+        logger.debug("RX: %s", response.hex())
+        return response
+
+    def send_and_receive(self, request: bytes) -> bytes:
+        """Send a Modbus request and wait for response (auto-locking)."""
         with self._lock:
-            if not self._serial or not self._serial.is_open:
-                self.open()
-            # Clear buffers
-            self._serial.reset_input_buffer()
-            self._serial.write(request)
-            logger.debug("TX: %s", request.hex())
+            return self._do_send_recv(request)
 
-            # Wait for response (Modbus RTU needs inter-frame delay)
-            time.sleep(0.05)
+    def send_and_receive_unlocked(self, request: bytes) -> bytes:
+        """Send a Modbus request without acquiring the lock.
 
-            # Read response
-            response = b""
-            deadline = time.time() + self.timeout
-            while time.time() < deadline:
-                chunk = self._serial.read(self._serial.in_waiting or 1)
-                if chunk:
-                    response += chunk
-                    time.sleep(0.02)
-                elif response:
-                    break
-
-            logger.debug("RX: %s", response.hex())
-            return response
+        Caller MUST hold self.lock() before calling this method.
+        """
+        return self._do_send_recv(request)
 
 
 # ---------------------------------------------------------------------------
@@ -202,18 +225,19 @@ def get_realtime(addr: int):
     regs = ADL400_REALTIME if meter.meter_type == MeterType.ADL400 else DJSF_REALTIME
     results = {}
 
-    for name, rdef in regs.items():
-        request = build_read_request(meter.slave_addr, rdef.address, rdef.count)
-        response = ser.send_and_receive(request)
-        if not response:
-            results[name] = {"value": None, "unit": rdef.unit, "error": "no response"}
-            continue
-        data = parse_read_response(response)
-        if data is None:
-            results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
-            continue
-        value = parse_register_value(data, rdef)
-        results[name] = {"value": value, "unit": rdef.unit}
+    with ser.lock():
+        for name, rdef in regs.items():
+            request = build_read_request(meter.slave_addr, rdef.address, rdef.count)
+            response = ser.send_and_receive_unlocked(request)
+            if not response:
+                results[name] = {"value": None, "unit": rdef.unit, "error": "no response"}
+                continue
+            data = parse_read_response(response)
+            if data is None:
+                results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
+                continue
+            value = parse_register_value(data, rdef)
+            results[name] = {"value": value, "unit": rdef.unit}
 
     return {
         "address": addr,
@@ -315,17 +339,18 @@ def get_monthly(addr: int, months_ago: int = Query(1, ge=1, le=48)):
         fwd_kwh = None
         rev_kwh = None
 
-        if req_fwd:
-            resp = ser.send_and_receive(req_fwd)
-            data = parse_read_response(resp) if resp else None
-            if data:
-                fwd_kwh = parse_djsf_monthly_energy(data)
+        with ser.lock():
+            if req_fwd:
+                resp = ser.send_and_receive_unlocked(req_fwd)
+                data = parse_read_response(resp) if resp else None
+                if data:
+                    fwd_kwh = parse_djsf_monthly_energy(data)
 
-        if req_rev:
-            resp = ser.send_and_receive(req_rev)
-            data = parse_read_response(resp) if resp else None
-            if data:
-                rev_kwh = parse_djsf_monthly_energy(data)
+            if req_rev:
+                resp = ser.send_and_receive_unlocked(req_rev)
+                data = parse_read_response(resp) if resp else None
+                if data:
+                    rev_kwh = parse_djsf_monthly_energy(data)
 
         return {
             "address": addr,
@@ -354,20 +379,21 @@ def get_yearly(addr: int):
         monthly_data = []
         total_energy = 0.0
 
-        for m in range(1, 13):
-            request = build_monthly_history_request_adl400(meter.slave_addr, m)
-            if request is None:
-                continue
-            response = ser.send_and_receive(request)
-            if not response:
-                continue
-            data = parse_read_response(response)
-            if data is None:
-                continue
-            block = parse_adl400_history_block(data)
-            if block:
-                monthly_data.append(block)
-                total_energy += block["energy_active_total_kwh"]
+        with ser.lock():
+            for m in range(1, 13):
+                request = build_monthly_history_request_adl400(meter.slave_addr, m)
+                if request is None:
+                    continue
+                response = ser.send_and_receive_unlocked(request)
+                if not response:
+                    continue
+                data = parse_read_response(response)
+                if data is None:
+                    continue
+                block = parse_adl400_history_block(data)
+                if block:
+                    monthly_data.append(block)
+                    total_energy += block["energy_active_total_kwh"]
 
         return {
             "address": addr,
@@ -383,33 +409,34 @@ def get_yearly(addr: int):
         total_rev = 0.0
         months = []
 
-        for m in range(1, 13):
-            fwd_kwh = None
-            rev_kwh = None
+        with ser.lock():
+            for m in range(1, 13):
+                fwd_kwh = None
+                rev_kwh = None
 
-            req_fwd = build_monthly_history_request_djsf(
-                meter.slave_addr, m, "forward")
-            if req_fwd:
-                resp = ser.send_and_receive(req_fwd)
-                data = parse_read_response(resp) if resp else None
-                if data:
-                    fwd_kwh = parse_djsf_monthly_energy(data)
-                    total_fwd += fwd_kwh
+                req_fwd = build_monthly_history_request_djsf(
+                    meter.slave_addr, m, "forward")
+                if req_fwd:
+                    resp = ser.send_and_receive_unlocked(req_fwd)
+                    data = parse_read_response(resp) if resp else None
+                    if data:
+                        fwd_kwh = parse_djsf_monthly_energy(data)
+                        total_fwd += fwd_kwh
 
-            req_rev = build_monthly_history_request_djsf(
-                meter.slave_addr, m, "reverse")
-            if req_rev:
-                resp = ser.send_and_receive(req_rev)
-                data = parse_read_response(resp) if resp else None
-                if data:
-                    rev_kwh = parse_djsf_monthly_energy(data)
-                    total_rev += rev_kwh
+                req_rev = build_monthly_history_request_djsf(
+                    meter.slave_addr, m, "reverse")
+                if req_rev:
+                    resp = ser.send_and_receive_unlocked(req_rev)
+                    data = parse_read_response(resp) if resp else None
+                    if data:
+                        rev_kwh = parse_djsf_monthly_energy(data)
+                        total_rev += rev_kwh
 
-            months.append({
-                "month": m,
-                "energy_forward_kwh": fwd_kwh,
-                "energy_reverse_kwh": rev_kwh,
-            })
+                months.append({
+                    "month": m,
+                    "energy_forward_kwh": fwd_kwh,
+                    "energy_reverse_kwh": rev_kwh,
+                })
 
         return {
             "address": addr,
