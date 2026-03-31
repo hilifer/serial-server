@@ -331,8 +331,87 @@ def cmd_mqtt(args):
 # List params mode
 # ---------------------------------------------------------------------------
 
+def cmd_parking(args):
+    """Query a parking space sensor."""
+    from parking import (
+        PARKING_BY_ID, PARKING_REGISTERS,
+        build_parking_status_request, build_parking_all_request,
+        parse_parking_status, parse_parking_all,
+    )
+
+    space = PARKING_BY_ID.get(args.parking)
+    if space is None:
+        print(f"{C.RED}Parking space {args.parking} not found. Valid: 1-54{C.END}")
+        sys.exit(1)
+
+    port = args.port if args.port != "COM33" else space.com_port
+    print(f"\n{C.BOLD}Parking Query: Space {space.space_id} (Zone {space.zone}){C.END}")
+    print(f"  Port: {port} @ {args.baudrate} baud, Modbus addr: {space.slave_addr}\n")
+
+    if args.param == "status":
+        frame = build_parking_status_request(space.slave_addr)
+    else:
+        frame = build_parking_all_request(space.slave_addr)
+
+    import serial as pyserial
+    try:
+        ser = pyserial.Serial(port=port, baudrate=args.baudrate, bytesize=8,
+                              parity="N", stopbits=1, timeout=args.timeout)
+    except pyserial.SerialException as e:
+        print(f"{C.RED}Serial open failed: {e}{C.END}")
+        sys.exit(1)
+
+    print(hex_dump(frame, "TX:"))
+    ser.reset_input_buffer()
+    ser.write(frame)
+    time.sleep(0.05)
+
+    response = b""
+    deadline = time.time() + args.timeout
+    while time.time() < deadline:
+        n = ser.in_waiting
+        if n > 0:
+            response += ser.read(n)
+            time.sleep(0.02)
+        elif response:
+            break
+        else:
+            time.sleep(0.01)
+
+    ser.close()
+
+    if not response:
+        print(f"  {C.YELLOW}No response{C.END}")
+        return
+
+    print(hex_dump(response, "RX:"))
+    data = parse_read_response(response)
+    if data is None:
+        print(f"  {C.RED}Parse failed{C.END}")
+        return
+
+    if args.param == "status":
+        val = parse_parking_status(data)
+        if val is not None:
+            label = "OCCUPIED" if val else "EMPTY"
+            color = C.RED if val else C.GREEN
+            print(f"\n  {C.BOLD}Status: {color}{label}{C.END}")
+    else:
+        result = parse_parking_all(data)
+        if result:
+            print(f"\n  {C.BOLD}Sensor Data:{C.END}")
+            for name, info in result.items():
+                val = info.get("value", "?")
+                unit = info.get("unit", "")
+                label = info.get("label", "")
+                extra = f"  ({label})" if label else ""
+                print(f"    {name:<20s}: {val} {unit}{extra}")
+
+
 def cmd_list_params():
-    print(f"\n{C.BOLD}Available meters and parameters{C.END}\n")
+    from parking import PARKING_SPACES, PARKING_REGISTERS
+
+    print(f"\n{C.BOLD}=== Energy Meters (COM33) ==={C.END}\n")
 
     for m in METERS:
         regs = ADL400_REALTIME if m.meter_type == MeterType.ADL400 else DJSF_REALTIME
@@ -341,6 +420,15 @@ def cmd_list_params():
             print(f"    {name:<30s} reg=0x{rdef.address:04X}  "
                   f"count={rdef.count}  scale={rdef.scale}  unit={rdef.unit}")
         print()
+
+    print(f"\n{C.BOLD}=== Parking Spaces (COM31 + COM32) ==={C.END}\n")
+    print(f"  Zone A (COM31): spaces 1-27,  Modbus addr 1-27")
+    print(f"  Zone B (COM32): spaces 28-54, Modbus addr 1-27\n")
+    print(f"  {C.BOLD}Sensor registers:{C.END}")
+    for name, rdef in PARKING_REGISTERS.items():
+        print(f"    {name:<20s} reg=0x{rdef.address:04X}  "
+              f"count={rdef.count}  scale={rdef.scale}  unit={rdef.unit}")
+    print()
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +477,10 @@ Examples:
     parser.add_argument("--meter", type=int, help="Meter address (1-8)")
     parser.add_argument("--param", type=str, help="Parameter name or 'all'")
 
+    # Parking mode
+    parser.add_argument("--parking", type=int, help="Parking space ID (1-54)")
+    # --param reused: 'status' or 'all' (default: all)
+
     # MQTT mode
     parser.add_argument("--mqtt", action="store_true", help="Send via MQTT WebSocket")
     parser.add_argument("--topic", type=str, help="MQTT topic (e.g. serial/com33/down)")
@@ -404,6 +496,10 @@ Examples:
         cmd_list_params()
     elif args.mqtt and args.hex and args.topic:
         cmd_mqtt(args)
+    elif args.parking is not None:
+        if not args.param:
+            args.param = "all"
+        cmd_parking(args)
     elif args.meter is not None and args.param:
         cmd_meter_query(args)
     elif args.modbus and args.addr is not None and args.reg is not None:
@@ -412,7 +508,7 @@ Examples:
         cmd_raw_hex(args)
     else:
         parser.print_help()
-        print(f"\n{C.YELLOW}Tip: use --list-params to see available meter parameters{C.END}")
+        print(f"\n{C.YELLOW}Tip: use --list-params to see all parameters{C.END}")
 
 
 if __name__ == "__main__":

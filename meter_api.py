@@ -29,6 +29,11 @@ from meter import (
     parse_adl400_history_block,
     parse_djsf_monthly_energy,
 )
+from parking import (
+    PARKING_SPACES, PARKING_BY_ID, PARKING_REGISTERS,
+    build_parking_status_request, build_parking_all_request,
+    parse_parking_status, parse_parking_all,
+)
 
 logger = logging.getLogger("meter-api")
 
@@ -338,3 +343,178 @@ def get_yearly(addr: int):
             "total_reverse_kwh": round(total_rev, 2),
             "months": months,
         })
+
+
+# ===========================================================================
+# Parking API Endpoints
+# ===========================================================================
+
+def get_parking_serial(com_port: str):
+    """Get shared SerialManager for parking COM port."""
+    from server import serial_managers
+    mgr = serial_managers.get(com_port)
+    if mgr is None:
+        abort(500, description=f"{com_port} SerialManager not initialized")
+    if not mgr.is_open:
+        abort(503, description=(
+            f"{com_port} serial port unavailable: {mgr.last_error or 'not connected'} "
+            "(auto-reconnect is running)"
+        ))
+    return mgr
+
+
+@app.get("/parking/spaces")
+def list_parking_spaces():
+    """List all 54 parking spaces."""
+    return jsonify([
+        {
+            "space_id": s.space_id,
+            "com_port": s.com_port,
+            "slave_addr": s.slave_addr,
+            "zone": s.zone,
+        }
+        for s in PARKING_SPACES
+    ])
+
+
+@app.get("/parking/status")
+def get_all_parking_status():
+    """Poll all 54 parking spaces and return occupied/empty status.
+
+    Query params:
+      zone: filter by zone (A or B), optional
+    """
+    from server import serial_managers
+    zone = request.args.get("zone", "").upper()
+
+    spaces = PARKING_SPACES
+    if zone:
+        spaces = [s for s in spaces if s.zone == zone]
+
+    results = []
+    # Group by COM port to batch queries
+    by_port: dict[str, list] = {}
+    for s in spaces:
+        by_port.setdefault(s.com_port, []).append(s)
+
+    for com_port, port_spaces in by_port.items():
+        mgr = serial_managers.get(com_port)
+        if mgr is None or not mgr.is_open:
+            for s in port_spaces:
+                results.append({
+                    "space_id": s.space_id,
+                    "zone": s.zone,
+                    "status": None,
+                    "label": "offline",
+                    "error": f"{com_port} unavailable",
+                })
+            continue
+
+        with mgr.lock():
+            for s in port_spaces:
+                req = build_parking_status_request(s.slave_addr)
+                resp = mgr.send_and_receive_unlocked(req)
+                data = parse_read_response(resp) if resp else None
+                status_val = parse_parking_status(data) if data else None
+
+                if status_val is not None:
+                    results.append({
+                        "space_id": s.space_id,
+                        "zone": s.zone,
+                        "status": int(status_val),
+                        "label": "occupied" if status_val else "empty",
+                    })
+                else:
+                    results.append({
+                        "space_id": s.space_id,
+                        "zone": s.zone,
+                        "status": None,
+                        "label": "no_response",
+                    })
+
+    # Sort by space_id
+    results.sort(key=lambda r: r["space_id"])
+
+    # Summary
+    online = [r for r in results if r["status"] is not None]
+    occupied = sum(1 for r in online if r["status"])
+
+    return jsonify({
+        "total": len(results),
+        "online": len(online),
+        "occupied": occupied,
+        "empty": len(online) - occupied,
+        "spaces": results,
+    })
+
+
+@app.get("/parking/space/<int:space_id>")
+def get_parking_space_detail(space_id: int):
+    """Read all sensor data for a specific parking space (1-54)."""
+    space = PARKING_BY_ID.get(space_id)
+    if space is None:
+        abort(404, description=f"Parking space {space_id} not found (valid: 1-54)")
+
+    ser = get_parking_serial(space.com_port)
+    req = build_parking_all_request(space.slave_addr)
+    resp = ser.send_and_receive(req)
+
+    if not resp:
+        abort(504, description="No response from parking sensor")
+
+    data = parse_read_response(resp)
+    if data is None:
+        abort(502, description="Invalid response from parking sensor")
+
+    result = parse_parking_all(data)
+    if result is None:
+        abort(502, description="Failed to parse parking sensor data")
+
+    return jsonify({
+        "space_id": space.space_id,
+        "zone": space.zone,
+        "com_port": space.com_port,
+        "slave_addr": space.slave_addr,
+        "data": result,
+    })
+
+
+@app.get("/parking/summary")
+def get_parking_summary():
+    """Quick summary: total/occupied/empty per zone."""
+    from server import serial_managers
+
+    summary = {"A": {"total": 27, "occupied": 0, "empty": 0, "offline": 0},
+               "B": {"total": 27, "occupied": 0, "empty": 0, "offline": 0}}
+
+    for zone, com_port in [("A", "COM31"), ("B", "COM32")]:
+        mgr = serial_managers.get(com_port)
+        if mgr is None or not mgr.is_open:
+            summary[zone]["offline"] = 27
+            continue
+
+        with mgr.lock():
+            for addr in range(1, 28):
+                req = build_parking_status_request(addr)
+                resp = mgr.send_and_receive_unlocked(req)
+                data = parse_read_response(resp) if resp else None
+                val = parse_parking_status(data) if data else None
+
+                if val is not None:
+                    if val:
+                        summary[zone]["occupied"] += 1
+                    else:
+                        summary[zone]["empty"] += 1
+                else:
+                    summary[zone]["offline"] += 1
+
+    total_occupied = summary["A"]["occupied"] + summary["B"]["occupied"]
+    total_empty = summary["A"]["empty"] + summary["B"]["empty"]
+
+    return jsonify({
+        "total_spaces": 54,
+        "occupied": total_occupied,
+        "empty": total_empty,
+        "offline": 54 - total_occupied - total_empty,
+        "zones": summary,
+    })
