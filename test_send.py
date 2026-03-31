@@ -74,7 +74,7 @@ def hex_dump(data: bytes, label: str = "") -> str:
 # ---------------------------------------------------------------------------
 
 def serial_send_recv(port: str, baudrate: int, data: bytes,
-                     timeout: float = 0.5) -> bytes:
+                     timeout: float = 1.0, protocol: str = "modbus") -> bytes:
     import serial
     try:
         ser = serial.Serial(port=port, baudrate=baudrate, bytesize=8,
@@ -89,14 +89,44 @@ def serial_send_recv(port: str, baudrate: int, data: bytes,
 
     time.sleep(0.05)
     response = b""
+    expected_len = None
     deadline = time.time() + timeout
+
     while time.time() < deadline:
         n = ser.in_waiting
         if n > 0:
             response += ser.read(n)
-            time.sleep(0.02)
+
+            # Try to calculate expected frame length
+            if expected_len is None:
+                if protocol == "parking" and len(response) >= 5:
+                    opcode = response[2]
+                    count = response[4]
+                    expected_len = 7 if opcode == 0x00 else 5 + count + 2
+                elif protocol == "modbus" and len(response) >= 3:
+                    fc = response[1]
+                    if fc & 0x80:
+                        expected_len = 5
+                    elif fc in (0x03, 0x04):
+                        expected_len = 3 + response[2] + 2
+                    elif fc == 0x10:
+                        expected_len = 8
+
+            # Check if complete
+            if expected_len and len(response) >= expected_len:
+                response = response[:expected_len]
+                break
+
+            time.sleep(0.01)
         elif response:
-            break
+            # Have partial data but no expected length — wait a bit more
+            if expected_len and len(response) < expected_len:
+                time.sleep(0.01)
+                continue
+            # No expected length and no new data — wait for inter-frame gap
+            time.sleep(0.01)
+            if ser.in_waiting == 0:
+                break
         else:
             time.sleep(0.01)
 
