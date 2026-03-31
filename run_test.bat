@@ -22,7 +22,20 @@ if not exist "venv" (
     python -m venv venv
 )
 call venv\Scripts\activate.bat
-pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+if not exist "venv\.deps_installed" (
+    echo Installing dependencies...
+    pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+    copy /y requirements.txt venv\.deps_installed >nul
+) else (
+    fc /b requirements.txt venv\.deps_installed >nul 2>&1
+    if %ERRORLEVEL% NEQ 0 (
+        echo Updating dependencies...
+        pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+        copy /y requirements.txt venv\.deps_installed >nul
+    ) else (
+        echo Dependencies up to date.
+    )
+)
 echo.
 
 echo [3/3] Running unit tests...

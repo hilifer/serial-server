@@ -19,7 +19,13 @@ if [ ! -d "venv" ]; then
     python3 -m venv venv
 fi
 source venv/bin/activate
-pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+if [ ! -f "venv/.deps_installed" ] || ! diff -q requirements.txt venv/.deps_installed >/dev/null 2>&1; then
+    echo "Installing dependencies..."
+    pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+    cp requirements.txt venv/.deps_installed
+else
+    echo "Dependencies up to date."
+fi
 echo ""
 
 echo "[3/3] Running unit tests..."

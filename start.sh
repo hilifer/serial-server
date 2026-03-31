@@ -22,8 +22,14 @@ if [ ! -d "venv" ]; then
 fi
 source venv/bin/activate
 
-echo "Installing dependencies..."
-pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+# Only install if first run or requirements.txt changed
+if [ ! -f "venv/.deps_installed" ] || ! diff -q requirements.txt venv/.deps_installed >/dev/null 2>&1; then
+    echo "Installing dependencies..."
+    pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
+    cp requirements.txt venv/.deps_installed
+else
+    echo "Dependencies up to date."
+fi
 echo ""
 
 # Start unified server (MQTT WS bridge + Meter API)
