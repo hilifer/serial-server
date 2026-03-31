@@ -221,7 +221,29 @@ def setup_logging(config: dict):
 # Main — start both MQTT WS bridge + FastAPI in one process
 # ---------------------------------------------------------------------------
 
+def ensure_deps():
+    """Auto-install dependencies if missing."""
+    import subprocess
+    required = {
+        "serial": "pyserial", "paho.mqtt": "paho-mqtt", "yaml": "pyyaml",
+        "fastapi": "fastapi", "uvicorn": "uvicorn",
+    }
+    missing = []
+    for mod, pkg in required.items():
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(pkg)
+    if missing:
+        print(f"[auto] Installing missing dependencies: {', '.join(missing)} ...")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", *missing, "-q"],
+        )
+
+
 def main():
+    ensure_deps()
+
     config = load_config()
     setup_logging(config)
 
