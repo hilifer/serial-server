@@ -223,17 +223,25 @@ class SerialManager:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _modbus_expected_len(response: bytes) -> int | None:
-        """Calculate expected Modbus RTU response length from partial data.
+    def _expected_response_len(response: bytes, protocol: str = "modbus") -> int | None:
+        """Calculate expected response length based on protocol.
 
-        Returns expected total frame length, or None if not enough data yet.
-
-        Frame formats:
-          Normal 03H response: [addr][03][byte_count][data...][CRC_lo][CRC_hi]
-                               length = 3 + byte_count + 2
-          Exception response:  [addr][0x83][error_code][CRC_lo][CRC_hi]
-                               length = 5
+        protocol: "modbus" for Modbus RTU (COM33 meters)
+                  "parking" for custom parking detector protocol (COM31/COM32)
         """
+        if protocol == "parking":
+            # Custom parking protocol:
+            # [ver][addr][opcode][start_reg][count][data...][CRC_lo CRC_hi]
+            # Read reply / Write reply: 5 + count + 2
+            if len(response) < 5:
+                return None
+            opcode = response[2]
+            count = response[4]
+            if opcode == 0x00:  # read request (shouldn't appear in response)
+                return 7
+            return 5 + count + 2
+
+        # Modbus RTU protocol
         if len(response) < 3:
             return None
 
@@ -252,17 +260,13 @@ class SerialManager:
         if func_code == 0x10:
             return 8
 
-        # Unknown function code — can't predict length
         return None
 
-    def _do_send_recv(self, request: bytes) -> bytes:
-        """Send Modbus request and read complete response.
+    def _do_send_recv(self, request: bytes, protocol: str = "modbus") -> bytes:
+        """Send request and read complete response.
 
-        Uses Modbus frame structure to determine when a response is complete:
-        1. Read until we have at least 3 bytes (addr + func + byte_count)
-        2. Calculate expected frame length from byte_count
-        3. Keep reading until we have the full frame or timeout
-        4. Verify CRC on complete frame
+        Uses frame structure to determine when a response is complete.
+        protocol: "modbus" or "parking"
 
         Returns b"" on any error.
         """
@@ -278,32 +282,29 @@ class SerialManager:
 
             response = b""
             expected_len = None
+            # Parking protocol needs 5 bytes for header, Modbus needs 3
+            min_header = 5 if protocol == "parking" else 3
             deadline = time.time() + self.timeout
 
             while time.time() < deadline:
-                # Read available bytes
                 n = self._serial.in_waiting
                 if n > 0:
                     chunk = self._serial.read(n)
                     if chunk:
                         response += chunk
 
-                    # Try to determine expected length once we have enough header
-                    if expected_len is None and len(response) >= 3:
-                        expected_len = self._modbus_expected_len(response)
+                    if expected_len is None and len(response) >= min_header:
+                        expected_len = self._expected_response_len(response, protocol)
 
-                    # Check if we have a complete frame
                     if expected_len is not None and len(response) >= expected_len:
-                        response = response[:expected_len]  # trim any trailing noise
+                        response = response[:expected_len]
                         break
 
                     time.sleep(0.01)
                 elif response:
-                    # No new data — if we already know expected length, keep waiting
                     if expected_len is not None and len(response) < expected_len:
                         time.sleep(0.01)
                         continue
-                    # Unknown length and no more data — assume done
                     break
                 else:
                     time.sleep(0.01)
@@ -312,8 +313,6 @@ class SerialManager:
                 logger.debug("[%s] RX: %s (%d/%s bytes)", self.port, response.hex(),
                              len(response),
                              str(expected_len) if expected_len else "?")
-
-                # Warn if frame appears incomplete
                 if expected_len is not None and len(response) < expected_len:
                     logger.warning("[%s] Incomplete frame: got %d, expected %d",
                                    self.port, len(response), expected_len)
@@ -325,20 +324,21 @@ class SerialManager:
             self._handle_error("send_recv", e)
             return b""
 
-    def send_and_receive(self, request: bytes) -> bytes:
-        """Send Modbus request and wait for response (auto-locking).
+    def send_and_receive(self, request: bytes, protocol: str = "modbus") -> bytes:
+        """Send request and wait for response (auto-locking).
 
+        protocol: "modbus" or "parking"
         Returns b"" if port is unavailable.
         """
         with self._lock:
-            return self._do_send_recv(request)
+            return self._do_send_recv(request, protocol)
 
-    def send_and_receive_unlocked(self, request: bytes) -> bytes:
-        """Send Modbus request without acquiring the lock.
+    def send_and_receive_unlocked(self, request: bytes, protocol: str = "modbus") -> bytes:
+        """Send request without acquiring the lock.
 
-        Caller MUST hold self.lock() before calling. Returns b"" if unavailable.
+        Caller MUST hold self.lock(). protocol: "modbus" or "parking"
         """
-        return self._do_send_recv(request)
+        return self._do_send_recv(request, protocol)
 
     # ------------------------------------------------------------------
     # Status info
