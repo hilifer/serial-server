@@ -19,7 +19,6 @@ from pathlib import Path
 
 import yaml
 import paho.mqtt.client as mqtt
-import uvicorn
 
 from serial_manager import SerialManager, create_serial_manager
 
@@ -218,15 +217,15 @@ def setup_logging(config: dict):
 
 
 # ---------------------------------------------------------------------------
-# Main — start both MQTT WS bridge + FastAPI in one process
+# Main — start both MQTT WS bridge + Flask API in one process
 # ---------------------------------------------------------------------------
 
 def ensure_deps():
     """Auto-install dependencies if missing."""
     import subprocess
     required = {
-        "serial": "pyserial", "paho.mqtt": "paho-mqtt", "yaml": "pyyaml",
-        "fastapi": "fastapi", "uvicorn": "uvicorn",
+        "serial": "pyserial", "paho.mqtt": "paho-mqtt",
+        "yaml": "pyyaml", "flask": "flask",
     }
     missing = []
     for mod, pkg in required.items():
@@ -267,8 +266,8 @@ def main():
     mqtt_server = MQTTSerialServer(config)
     mqtt_server.start()
 
-    # 3. Import and start FastAPI (blocking — runs uvicorn)
-    from meter_api import app  # noqa: import here to use shared serial_managers
+    # 3. Import and start Flask API (blocking)
+    from meter_api import app
 
     def _signal_handler(sig, frame):
         mqtt_server.stop()
@@ -279,9 +278,9 @@ def main():
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    logger.info("Starting API service on http://0.0.0.0:8000 ...")
-    logger.info("API docs: http://localhost:8000/docs")
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    api_port = config.get("api", {}).get("port", 8000)
+    logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)
+    app.run(host="0.0.0.0", port=api_port, threaded=True)
 
 
 if __name__ == "__main__":
