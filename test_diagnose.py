@@ -448,13 +448,40 @@ def diagnose_meter(port, addr, baudrates, timeout):
 
     ok_count = 0
     for reg, count, reg_name, parser_name, scale, unit in test_regs:
-        data = safe_read(ser, addr, reg, count, timeout)
+        # Build and send request
+        req = build_read_request(addr, reg, count)
+        resp = send_recv(ser, req, timeout)
+
+        # Show TX/RX raw frames
+        tx_hex = " ".join(f"{b:02X}" for b in req)
+        if resp:
+            rx_hex = " ".join(f"{b:02X}" for b in resp)
+        else:
+            rx_hex = "(无响应)"
+
+        data = parse_read_response(resp) if resp else None
+
         if data and len(data) >= count * 2:
-            raw = parse_register_value(data, RegisterDef(reg, count, parser_name, scale, unit))
-            ok(f"reg 0x{reg:04X} ({reg_name:<12s}): {raw:>14.4f} {unit}")
+            # Show raw data bytes
+            data_hex = " ".join(f"{b:02X}" for b in data)
+
+            # Parse raw value before scaling
+            rdef = RegisterDef(reg, count, parser_name, scale, unit)
+            from meter import PARSERS
+            raw_val = PARSERS[parser_name](data)
+            final_val = round(raw_val * scale, 6)
+
+            ok(f"reg 0x{reg:04X} {reg_name}")
+            print(f"      TX: {C.CYAN}{tx_hex}{C.END}")
+            print(f"      RX: {C.CYAN}{rx_hex}{C.END}")
+            print(f"      数据: {C.CYAN}{data_hex}{C.END}")
+            print(f"      解析: {parser_name}({data_hex}) = {raw_val}"
+                  f" × {scale} = {C.BOLD}{final_val} {unit}{C.END}")
             ok_count += 1
         else:
-            fail(f"reg 0x{reg:04X} ({reg_name:<12s}): 失败")
+            fail(f"reg 0x{reg:04X} {reg_name}")
+            print(f"      TX: {C.CYAN}{tx_hex}{C.END}")
+            print(f"      RX: {C.RED}{rx_hex}{C.END}")
 
     # Reliability test
     subheader(f"可靠性测试 ({probe_name}, 10次)")
