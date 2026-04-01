@@ -196,9 +196,9 @@ class RegisterDef:
 # We use PRIMARY SIDE (0x0800+) so readings are correct regardless of
 # whether CT/PT transformers are configured.
 #
-# Ratio registers (for reference):
-#   0x008E: 电压变比 PT (R/W, UINT16)
-#   0x008F: 电流变比 CT (R/W, UINT16)
+# Ratio registers (PyMuPDF verified from PDF Page 17):
+#   0x008D: 电压变比 PT (R/W, UINT16)
+#   0x008E: 电流变比 CT (R/W, UINT16)
 
 ADL400_REALTIME = {
     # Primary side float registers (0x0800+), already include PT/CT ratios
@@ -245,41 +245,43 @@ ADL400_RATIO_REGS = {
 ADL400_BATCH_READS = []
 
 # ADL400 daily history: base 0x6000, stride 0x22, up to 90 days
-# Each block: 34 registers
-#   offset 0-1: freeze time (year-month, day-hour)
-#   offset 2-3: total active energy (UINT32, 0.01kWh)
+# NOTE: History blocks are SECONDARY SIDE data (二次侧, 单位0.01kWh).
+# For meters with CT/PT configured, these values need ×PT×CT to get actual.
+# The realtime registers (0x0800+) are primary side and don't need conversion.
 ADL400_DAILY_BASE = 0x6000
 ADL400_DAILY_STRIDE = 0x0022
 ADL400_DAILY_MAX = 90
 
 # ADL400 monthly history: base 0x7000, stride 0x22, up to 48 months
+# Also secondary side data (二次侧).
 ADL400_MONTHLY_BASE = 0x7000
 ADL400_MONTHLY_STRIDE = 0x0022
 ADL400_MONTHLY_MAX = 48
 
 # ADL400 history block layout (offsets in registers from block base)
+# Unit: 0.01 kWh (二次侧, 需乘以PT×CT得到实际值)
 ADL400_HISTORY_LAYOUT = {
     "time_ym":             0,   # year-month (uint16)
     "time_dh":             1,   # day-hour (uint16)
-    "energy_active_total": 2,   # uint32, 0.01 kWh
+    "energy_active_total": 2,   # uint32, 0.01 kWh (二次侧)
     "energy_active_peak":  4,   # uint32, 0.01 kWh (尖)
     "energy_active_high":  6,   # uint32, 0.01 kWh (峰)
     "energy_active_mid":   8,   # uint32, 0.01 kWh (平)
     "energy_active_low":   10,  # uint32, 0.01 kWh (谷)
-    "energy_reactive_total": 12,  # uint32, 0.01 kvarh
+    "energy_reactive_total": 12,  # uint32, 0.01 kvarh (二次侧)
 }
 
 # --- DJSF1352-RN registers (DC meter) ---
-# Source: docs/DJSF1352-RN_导轨式直流电能表.pdf
+# Source: docs/DJSF1352-RN_导轨式直流电能表.pdf (PyMuPDF Page 15-16)
 # Float registers 50-55 are PRIMARY SIDE values (已含变比).
-# Integer registers 0-9 are also available but need decimal point conversion.
 # Ratio registers: 16=电压变比, 17=额定一次电流值
+# Energy reg 12-15: PDF says "一次侧电能，单位WH" (Wh)
 DJSF_RN_REALTIME = {
     "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V (一次侧)
     "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A (一次侧)
     "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW (一次侧)
-    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 一次侧 0.1Wh
-    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 一次侧 0.1Wh
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.001, "kWh"),  # 12-13 一次侧 单位Wh
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.001, "kWh"),  # 14-15 一次侧 单位Wh
     "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
 }
 
@@ -289,16 +291,17 @@ DJSF_RN_RATIO_REGS = {
 }
 
 # --- DJSF1352-RN-6 registers (DC meter) ---
-# Source: docs/537_DJSF1352-RN-6导轨式直流电能表说明书V1.1(中英)(2).pdf
+# Source: docs/537_DJSF1352-RN-6导轨式直流电能表说明书V1.1(中英)(2).pdf (PyMuPDF Page 28)
 # Register table starts from address 4 (no integer regs 0-3).
 # Float registers 50-55 are PRIMARY SIDE values (一次值，已含变比).
 # Ratio registers: 16=电压变比, 17=额定一次电流值
+# Energy reg 12-15: PDF says "一次侧电能，单位0.1wh" (0.1Wh) — different from RN!
 DJSF_RN6_REALTIME = {
     "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V (一次值)
     "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A (一次值)
     "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW (一次值)
-    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 一次侧 0.1Wh
-    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 一次侧 0.1Wh
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 一次侧 单位0.1Wh
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 一次侧 单位0.1Wh
     "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
 }
 
@@ -339,15 +342,28 @@ DJSF_BATCH_READS = [
     ]},
 ]
 
-# DJSF monthly energy (Modbus): base address 2000 area
-# Current month total forward: addr 2010-2011 (2 regs, unit Wh)
-# Month 1~12 forward total: addr 2020 + (month-1)*10 for 2 regs each
-DJSF_MONTHLY_CURRENT_FWD = 2010     # current month total forward energy
-DJSF_MONTHLY_CURRENT_REV = 2150     # current month total reverse energy
-DJSF_MONTHLY_HISTORY_FWD_BASE = 2020  # month 1 forward total
-DJSF_MONTHLY_HISTORY_REV_BASE = 2160  # month 1 reverse total
-DJSF_MONTHLY_STRIDE = 10            # 10 registers per month (5 rates x 2 regs)
-DJSF_MONTHLY_MAX = 12
+# --- DJSF-RN monthly energy (Modbus): address 2000 area, unit Wh ---
+# Source: DJSF1352-RN PDF Page 16-17
+DJSF_RN_MONTHLY_CURRENT_FWD = 2010      # 当月总正向有功电能
+DJSF_RN_MONTHLY_CURRENT_REV = 2150      # 当月总反向有功电能
+DJSF_RN_MONTHLY_FWD_BASE = 2020         # 1-12月正向 (stride 10)
+DJSF_RN_MONTHLY_REV_BASE = 2160         # 1-12月反向 (stride 10)
+DJSF_RN_MONTHLY_STRIDE = 10
+DJSF_RN_MONTHLY_MAX = 12
+DJSF_RN_MONTHLY_UNIT_WH = True          # 单位: Wh (÷1000→kWh)
+
+# --- DJSF-RN6 monthly energy (Modbus): address 12288 area, unit 0.1Wh ---
+# Source: DJSF1352-RN-6 PDF Page 28-30 (decimal address 12288 = 0x3000)
+DJSF_RN6_MONTHLY_FWD_TOTAL = 12288      # 总正向有功电能
+DJSF_RN6_MONTHLY_CURRENT_FWD = 12306    # 当月总正向有功电能
+DJSF_RN6_MONTHLY_REV_TOTAL = 12324      # 总反向有功电能
+DJSF_RN6_MONTHLY_CURRENT_REV = 12342    # 当月总反向有功电能
+DJSF_RN6_MONTHLY_UNIT_WH = False        # 单位: 0.1Wh (÷10000→kWh)
+
+# Backward compat aliases
+DJSF_MONTHLY_CURRENT_FWD = DJSF_RN_MONTHLY_CURRENT_FWD
+DJSF_MONTHLY_CURRENT_REV = DJSF_RN_MONTHLY_CURRENT_REV
+DJSF_MONTHLY_MAX = DJSF_RN_MONTHLY_MAX
 
 
 # ---------------------------------------------------------------------------
@@ -420,18 +436,33 @@ def build_monthly_history_request_adl400(slave_addr: int, months_ago: int) -> by
 
 
 def build_monthly_history_request_djsf(slave_addr: int, month: int,
-                                       direction: str = "forward") -> bytes | None:
+                                       direction: str = "forward",
+                                       meter_type: MeterType = MeterType.DJSF1352_RN
+                                       ) -> bytes | None:
     """Build request for DJSF monthly history.
 
-    month: 1-12 (calendar month). direction: 'forward' or 'reverse'.
+    RN uses address 2000 area (unit Wh).
+    RN-6 uses address 12288 area (unit 0.1Wh).
     """
-    if month < 1 or month > DJSF_MONTHLY_MAX:
+    if month < 1 or month > 12:
         return None
-    if direction == "forward":
-        addr = DJSF_MONTHLY_HISTORY_FWD_BASE + (month - 1) * DJSF_MONTHLY_STRIDE
+
+    if meter_type == MeterType.DJSF1352_RN_6:
+        # RN-6: 12288 area, stride unknown for monthly history per-month
+        # RN-6 only has current month and total, not per-month history
+        # Use current month registers
+        if direction == "forward":
+            addr = DJSF_RN6_MONTHLY_CURRENT_FWD
+        else:
+            addr = DJSF_RN6_MONTHLY_CURRENT_REV
+        return build_read_request(slave_addr, addr, 2)
     else:
-        addr = DJSF_MONTHLY_HISTORY_REV_BASE + (month - 1) * DJSF_MONTHLY_STRIDE
-    return build_read_request(slave_addr, addr, 2)
+        # RN: 2000 area, per-month with stride 10
+        if direction == "forward":
+            addr = DJSF_RN_MONTHLY_FWD_BASE + (month - 1) * DJSF_RN_MONTHLY_STRIDE
+        else:
+            addr = DJSF_RN_MONTHLY_REV_BASE + (month - 1) * DJSF_RN_MONTHLY_STRIDE
+        return build_read_request(slave_addr, addr, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -528,7 +559,15 @@ def parse_adl400_history_block(data: bytes) -> dict | None:
     return result
 
 
-def parse_djsf_monthly_energy(data: bytes) -> float:
-    """Parse DJSF monthly energy response (2 registers = uint32, unit Wh)."""
+def parse_djsf_monthly_energy(data: bytes,
+                              meter_type: MeterType = MeterType.DJSF1352_RN
+                              ) -> float:
+    """Parse DJSF monthly energy response (2 registers = uint32).
+
+    RN: unit Wh → ÷1000 → kWh
+    RN-6: unit 0.1Wh → ÷10000 → kWh
+    """
     raw = parse_uint32(data)
+    if meter_type == MeterType.DJSF1352_RN_6:
+        return raw / 10000.0  # 0.1Wh -> kWh
     return raw / 1000.0  # Wh -> kWh
