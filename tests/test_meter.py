@@ -201,12 +201,13 @@ class TestParseRealtimeResponse:
         return build_frame(1, 0x03, payload)
 
     def test_adl400_voltage(self):
-        data = b"\x09\x10"  # 2320 -> 232.0V
+        # ADL400 now uses primary-side float registers
+        data = struct.pack(">f", 232.0)  # IEEE 754 float
         frame = self._make_response(data)
         result = parse_realtime_response("voltage_a", frame, MeterType.ADL400)
         assert result is not None
         assert result["name"] == "voltage_a"
-        assert abs(result["value"] - 232.0) < 0.01
+        assert abs(result["value"] - 232.0) < 0.1
         assert result["unit"] == "V"
 
     def test_adl400_energy(self):

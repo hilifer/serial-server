@@ -244,7 +244,7 @@ def test_communication(ser: serial.Serial, addr: int) -> bool:
         return False
 
     if meter.meter_type == MeterType.ADL400:
-        request = build_read_request(addr, 0x0077, 1)  # frequency
+        request = build_read_request(addr, 0x0834, 2)  # frequency (primary side float)
     else:
         request = build_read_request(addr, 50, 2)  # voltage float
 

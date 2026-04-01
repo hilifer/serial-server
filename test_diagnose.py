@@ -45,19 +45,19 @@ from meter import (
 # ---------------------------------------------------------------------------
 
 ADL400_LABELS = {
-    "voltage_a": "A相电压",
-    "voltage_b": "B相电压",
-    "voltage_c": "C相电压",
-    "current_a": "A相电流",
-    "current_b": "B相电流",
-    "current_c": "C相电流",
-    "power_total": "总有功功率",
-    "power_a": "A相功率",
-    "power_b": "B相功率",
-    "power_c": "C相功率",
-    "reactive_power_total": "总无功功率",
-    "apparent_power_total": "总视在功率",
-    "power_factor": "功率因数",
+    "voltage_a": "A相电压(一次侧)",
+    "voltage_b": "B相电压(一次侧)",
+    "voltage_c": "C相电压(一次侧)",
+    "current_a": "A相电流(一次侧)",
+    "current_b": "B相电流(一次侧)",
+    "current_c": "C相电流(一次侧)",
+    "power_total": "总有功功率(一次侧)",
+    "power_a": "A相功率(一次侧)",
+    "power_b": "B相功率(一次侧)",
+    "power_c": "C相功率(一次侧)",
+    "reactive_power_total": "总无功功率(一次侧)",
+    "apparent_power_total": "总视在功率(一次侧)",
+    "power_factor": "总功率因数",
     "frequency": "频率",
     "energy_forward_total": "正向有功总电能",
     "energy_reverse_total": "反向有功总电能",
@@ -372,8 +372,8 @@ def diagnose_meter(port, addr, baudrates, timeout):
 
     # Choose probe register based on meter type
     if is_ac:
-        probe_reg, probe_count, probe_name = 0x0077, 1, "频率"
-        probe_scale, probe_unit = 0.01, "Hz"
+        probe_reg, probe_count, probe_name = 0x0834, 2, "频率"
+        probe_scale, probe_unit = 1.0, "Hz"
     else:
         probe_reg, probe_count, probe_name = 5, 1, "温度"
         probe_scale, probe_unit = 0.1, "°C"
@@ -393,7 +393,10 @@ def diagnose_meter(port, addr, baudrates, timeout):
         ser.close()
 
         if data:
-            val = struct.unpack(">h", data)[0] * probe_scale
+            if probe_count == 2 and len(data) >= 4:
+                val = struct.unpack(">f", data)[0] * probe_scale
+            else:
+                val = struct.unpack(">h", data)[0] * probe_scale
             ok(f"{baud} baud: 正常 ({probe_name} = {val:.1f} {probe_unit})")
             working_baud = baud
             break
@@ -411,23 +414,25 @@ def diagnose_meter(port, addr, baudrates, timeout):
 
     if is_ac:
         test_regs = [
-            (0x0000, 2, "组合有功总电能",   "uint32", 0.01, "kWh"),
-            (0x000A, 2, "正向有功总电能",   "uint32", 0.01, "kWh"),
-            (0x0014, 2, "反向有功总电能",   "uint32", 0.01, "kWh"),
-            (0x0061, 1, "A相电压",        "uint16", 0.1,  "V"),
-            (0x0062, 1, "B相电压",        "uint16", 0.1,  "V"),
-            (0x0063, 1, "C相电压",        "uint16", 0.1,  "V"),
-            (0x0064, 1, "A相电流",        "uint16", 0.01, "A"),
-            (0x0065, 1, "B相电流",        "uint16", 0.01, "A"),
-            (0x0066, 1, "C相电流",        "uint16", 0.01, "A"),
-            (0x0077, 1, "频率",          "uint16", 0.01, "Hz"),
-            (0x0164, 2, "A相功率",        "int32",  0.001, "kW"),
-            (0x0166, 2, "B相功率",        "int32",  0.001, "kW"),
-            (0x0168, 2, "C相功率",        "int32",  0.001, "kW"),
-            (0x016A, 2, "总有功功率",      "int32",  0.001, "kW"),
-            (0x0172, 2, "总无功功率",      "int32",  0.001, "kvar"),
-            (0x017A, 2, "总视在功率",      "int32",  0.001, "kVA"),
-            (0x017F, 1, "功率因数",       "int16",  0.001, ""),
+            # Primary side float registers (already include PT/CT ratios)
+            (0x0800, 2, "A相电压(一次侧)",     "float",  1.0,    "V"),
+            (0x0802, 2, "B相电压(一次侧)",     "float",  1.0,    "V"),
+            (0x0804, 2, "C相电压(一次侧)",     "float",  1.0,    "V"),
+            (0x080C, 2, "A相电流(一次侧)",     "float",  1.0,    "A"),
+            (0x080E, 2, "B相电流(一次侧)",     "float",  1.0,    "A"),
+            (0x0810, 2, "C相电流(一次侧)",     "float",  1.0,    "A"),
+            (0x081A, 2, "总有功功率(一次侧)",   "float",  1.0,    "kW"),
+            (0x0822, 2, "总无功功率(一次侧)",   "float",  1.0,    "kvar"),
+            (0x082A, 2, "总视在功率(一次侧)",   "float",  1.0,    "kVA"),
+            (0x0832, 2, "总功率因数",         "float",  1.0,    ""),
+            (0x0834, 2, "频率",             "float",  1.0,    "Hz"),
+            # Energy (primary side, UINT32)
+            (0x0842, 2, "组合有功总电能",      "uint32", 0.01,   "kWh"),
+            (0x0846, 2, "正向有功总电能",      "uint32", 0.01,   "kWh"),
+            (0x084E, 2, "反向有功总电能",      "uint32", 0.01,   "kWh"),
+            # Ratio registers
+            (0x008E, 1, "电压变比(PT)",       "uint16", 1.0,    ""),
+            (0x008F, 1, "电流变比(CT)",       "uint16", 1.0,    ""),
         ]
     else:
         test_regs = [
@@ -522,16 +527,16 @@ def scan_all(port, baudrate, timeout, quick=False):
         name = m.name
         is_ac = m.meter_type == MeterType.ADL400
 
-        # Quick probe
+        # Quick probe — use primary-side float for ADL400, int16 for DJSF
         if is_ac:
-            probe_data = read_reg(ser, addr, 0x0077, 1, timeout)
+            probe_data = safe_read(ser, addr, 0x0834, 2, timeout)  # frequency float
         else:
-            probe_data = read_reg(ser, addr, 5, 1, timeout)
+            probe_data = read_reg(ser, addr, 5, 1, timeout)  # temperature int16
 
         if probe_data is None:
-            # Try once more
+            # Retry once
             if is_ac:
-                probe_data = read_reg(ser, addr, 0x0077, 1, timeout)
+                probe_data = safe_read(ser, addr, 0x0834, 2, timeout)
             else:
                 probe_data = read_reg(ser, addr, 5, 1, timeout)
 
@@ -544,7 +549,7 @@ def scan_all(port, baudrate, timeout, quick=False):
 
         if quick:
             if is_ac:
-                freq = struct.unpack(">H", probe_data)[0] * 0.01
+                freq = struct.unpack(">f", probe_data)[0]
                 ok(f"[{addr}] {name} ({model}): 频率 = {freq:.2f} Hz")
             else:
                 temp = struct.unpack(">h", probe_data)[0] * 0.1

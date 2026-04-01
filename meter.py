@@ -187,74 +187,50 @@ class RegisterDef:
 
 
 # --- ADL400 registers ---
+# Source: docs/ADL400_导轨式多功能电能表.pdf
+#
+# ADL400 has TWO sets of registers:
+#   - Secondary side (0x0061+): raw meter values, need ×PT ×CT conversion
+#   - Primary side (0x0800+): Float, already includes PT/CT ratios
+#
+# We use PRIMARY SIDE (0x0800+) so readings are correct regardless of
+# whether CT/PT transformers are configured.
+#
+# Ratio registers (for reference):
+#   0x008E: 电压变比 PT (R/W, UINT16)
+#   0x008F: 电流变比 CT (R/W, UINT16)
+
 ADL400_REALTIME = {
-    "voltage_a":   RegisterDef(0x0061, 1, "uint16", 0.1, "V"),
-    "voltage_b":   RegisterDef(0x0062, 1, "uint16", 0.1, "V"),
-    "voltage_c":   RegisterDef(0x0063, 1, "uint16", 0.1, "V"),
-    "current_a":   RegisterDef(0x0064, 1, "uint16", 0.01, "A"),
-    "current_b":   RegisterDef(0x0065, 1, "uint16", 0.01, "A"),
-    "current_c":   RegisterDef(0x0066, 1, "uint16", 0.01, "A"),
-    "power_total": RegisterDef(0x016A, 2, "int32", 0.001, "kW"),
-    "power_a":     RegisterDef(0x0164, 2, "int32", 0.001, "kW"),
-    "power_b":     RegisterDef(0x0166, 2, "int32", 0.001, "kW"),
-    "power_c":     RegisterDef(0x0168, 2, "int32", 0.001, "kW"),
-    "reactive_power_total": RegisterDef(0x0172, 2, "int32", 0.001, "kvar"),
-    "apparent_power_total": RegisterDef(0x017A, 2, "int32", 0.001, "kVA"),
-    "power_factor": RegisterDef(0x017F, 1, "int16", 0.001, ""),
-    "frequency":   RegisterDef(0x0077, 1, "uint16", 0.01, "Hz"),
-    "energy_forward_total":  RegisterDef(0x000A, 2, "uint32", 0.01, "kWh"),
-    "energy_reverse_total":  RegisterDef(0x0014, 2, "uint32", 0.01, "kWh"),
-    "energy_combined_total": RegisterDef(0x0000, 2, "uint32", 0.01, "kWh"),
+    # Primary side float registers (0x0800+), already include PT/CT ratios
+    "voltage_a":   RegisterDef(0x0800, 2, "float", 1.0, "V"),
+    "voltage_b":   RegisterDef(0x0802, 2, "float", 1.0, "V"),
+    "voltage_c":   RegisterDef(0x0804, 2, "float", 1.0, "V"),
+    "current_a":   RegisterDef(0x080C, 2, "float", 1.0, "A"),
+    "current_b":   RegisterDef(0x080E, 2, "float", 1.0, "A"),
+    "current_c":   RegisterDef(0x0810, 2, "float", 1.0, "A"),
+    "power_a":     RegisterDef(0x0814, 2, "float", 1.0, "kW"),
+    "power_b":     RegisterDef(0x0816, 2, "float", 1.0, "kW"),
+    "power_c":     RegisterDef(0x0818, 2, "float", 1.0, "kW"),
+    "power_total": RegisterDef(0x081A, 2, "float", 1.0, "kW"),
+    "reactive_power_total": RegisterDef(0x0822, 2, "float", 1.0, "kvar"),
+    "apparent_power_total": RegisterDef(0x082A, 2, "float", 1.0, "kVA"),
+    "power_factor": RegisterDef(0x0832, 2, "float", 1.0, ""),
+    "frequency":   RegisterDef(0x0834, 2, "float", 1.0, "Hz"),
+    # Energy: primary side, UINT32, unit 0.01kWh (at 0x0842+)
+    "energy_combined_total": RegisterDef(0x0842, 2, "uint32", 0.01, "kWh"),
+    "energy_forward_total":  RegisterDef(0x0846, 2, "uint32", 0.01, "kWh"),
+    "energy_reverse_total":  RegisterDef(0x084E, 2, "uint32", 0.01, "kWh"),
 }
 
-# Batch read groups for ADL400 — read contiguous registers in one request.
-#   Group 1: reg 0x0000, count 2  → energy_combined_total
-#   Group 2: reg 0x000A, count 2  → energy_forward_total
-#   Group 3: reg 0x0014, count 2  → energy_reverse_total
-#   Group 4: reg 0x0061, count 6  → voltage_a/b/c + current_a/b/c
-#   Group 5: reg 0x0077, count 1  → frequency
-#   Group 6: reg 0x0164, count 8  → power_a/b/c/total (0x0164-0x016B)
-#   Group 7: reg 0x0172, count 2  → reactive_power_total
-#   Group 8: reg 0x017A, count 2  → apparent_power_total
-#   Group 9: reg 0x017F, count 1  → power_factor
-# Total: 9 requests instead of 17
-ADL400_BATCH_READS = [
-    {"start": 0x0000, "count": 2, "fields": [
-        ("energy_combined_total", RegisterDef(0x0000, 2, "uint32", 0.01, "kWh"), 0),
-    ]},
-    {"start": 0x000A, "count": 2, "fields": [
-        ("energy_forward_total", RegisterDef(0x000A, 2, "uint32", 0.01, "kWh"), 0),
-    ]},
-    {"start": 0x0014, "count": 2, "fields": [
-        ("energy_reverse_total", RegisterDef(0x0014, 2, "uint32", 0.01, "kWh"), 0),
-    ]},
-    {"start": 0x0061, "count": 6, "fields": [
-        ("voltage_a", RegisterDef(0x0061, 1, "uint16", 0.1, "V"), 0),
-        ("voltage_b", RegisterDef(0x0062, 1, "uint16", 0.1, "V"), 2),
-        ("voltage_c", RegisterDef(0x0063, 1, "uint16", 0.1, "V"), 4),
-        ("current_a", RegisterDef(0x0064, 1, "uint16", 0.01, "A"), 6),
-        ("current_b", RegisterDef(0x0065, 1, "uint16", 0.01, "A"), 8),
-        ("current_c", RegisterDef(0x0066, 1, "uint16", 0.01, "A"), 10),
-    ]},
-    {"start": 0x0077, "count": 1, "fields": [
-        ("frequency", RegisterDef(0x0077, 1, "uint16", 0.01, "Hz"), 0),
-    ]},
-    {"start": 0x0164, "count": 8, "fields": [
-        ("power_a",     RegisterDef(0x0164, 2, "int32", 0.001, "kW"), 0),
-        ("power_b",     RegisterDef(0x0166, 2, "int32", 0.001, "kW"), 4),
-        ("power_c",     RegisterDef(0x0168, 2, "int32", 0.001, "kW"), 8),
-        ("power_total", RegisterDef(0x016A, 2, "int32", 0.001, "kW"), 12),
-    ]},
-    {"start": 0x0172, "count": 2, "fields": [
-        ("reactive_power_total", RegisterDef(0x0172, 2, "int32", 0.001, "kvar"), 0),
-    ]},
-    {"start": 0x017A, "count": 2, "fields": [
-        ("apparent_power_total", RegisterDef(0x017A, 2, "int32", 0.001, "kVA"), 0),
-    ]},
-    {"start": 0x017F, "count": 1, "fields": [
-        ("power_factor", RegisterDef(0x017F, 1, "int16", 0.001, ""), 0),
-    ]},
-]
+# Ratio registers for ADL400 (read-only check)
+ADL400_RATIO_REGS = {
+    "pt": RegisterDef(0x008E, 1, "uint16", 1.0, ""),  # 电压变比 PT
+    "ct": RegisterDef(0x008F, 1, "uint16", 1.0, ""),  # 电流变比 CT
+}
+
+# Batch reads no longer used for ADL400 (primary-side floats are not contiguous
+# in the same way). Individual reads via safe_read_registers are used instead.
+ADL400_BATCH_READS = []
 
 # ADL400 daily history: base 0x6000, stride 0x22, up to 90 days
 # Each block: 34 registers
@@ -283,29 +259,40 @@ ADL400_HISTORY_LAYOUT = {
 
 # --- DJSF1352-RN registers (DC meter) ---
 # Source: docs/DJSF1352-RN_导轨式直流电能表.pdf
-# This model has integer registers 0-9 (with decimal point registers)
-# AND float registers 50-55. Both sets available.
+# Float registers 50-55 are PRIMARY SIDE values (已含变比).
+# Integer registers 0-9 are also available but need decimal point conversion.
+# Ratio registers: 16=电压变比, 17=额定一次电流值
 DJSF_RN_REALTIME = {
-    "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V
-    "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A
-    "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW
-    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 0.1Wh
-    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 0.1Wh
+    "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V (一次侧)
+    "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A (一次侧)
+    "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW (一次侧)
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 一次侧 0.1Wh
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 一次侧 0.1Wh
     "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
+}
+
+DJSF_RN_RATIO_REGS = {
+    "voltage_ratio": RegisterDef(16, 1, "uint16", 1.0, ""),  # 电压变比
+    "current_ratio": RegisterDef(17, 1, "uint16", 1.0, ""),  # 额定一次电流值
 }
 
 # --- DJSF1352-RN-6 registers (DC meter) ---
 # Source: docs/537_DJSF1352-RN-6导轨式直流电能表说明书V1.1(中英)(2).pdf
-# This model does NOT have integer registers 0-3 (电压/电流/功率整数值).
-# Register table starts from address 4 (断线检测).
-# Float registers 50-55 are the primary measurement registers.
+# Register table starts from address 4 (no integer regs 0-3).
+# Float registers 50-55 are PRIMARY SIDE values (一次值，已含变比).
+# Ratio registers: 16=电压变比, 17=额定一次电流值
 DJSF_RN6_REALTIME = {
     "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V (一次值)
     "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A (一次值)
     "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW (一次值)
-    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 0.1Wh (一次侧)
-    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 0.1Wh (一次侧)
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 一次侧 0.1Wh
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 一次侧 0.1Wh
     "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
+}
+
+DJSF_RN6_RATIO_REGS = {
+    "voltage_ratio": RegisterDef(16, 1, "uint16", 1.0, ""),  # 电压变比
+    "current_ratio": RegisterDef(17, 1, "uint16", 1.0, ""),  # 额定一次电流值(第一路)
 }
 
 # Unified accessor — select register set by meter type
