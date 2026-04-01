@@ -281,15 +281,44 @@ ADL400_HISTORY_LAYOUT = {
     "energy_reactive_total": 12,  # uint32, 0.01 kvarh
 }
 
-# --- DJSF1352-RN / RN-6 registers (DC meters) ---
-DJSF_REALTIME = {
-    "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),
-    "current":       RegisterDef(52, 2, "float", 1.0, "A"),
-    "power":         RegisterDef(54, 2, "float", 1.0, "kW"),
-    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),
-    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),
-    "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),
+# --- DJSF1352-RN registers (DC meter) ---
+# Source: docs/DJSF1352-RN_导轨式直流电能表.pdf
+# This model has integer registers 0-9 (with decimal point registers)
+# AND float registers 50-55. Both sets available.
+DJSF_RN_REALTIME = {
+    "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V
+    "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A
+    "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 0.1Wh
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 0.1Wh
+    "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
 }
+
+# --- DJSF1352-RN-6 registers (DC meter) ---
+# Source: docs/537_DJSF1352-RN-6导轨式直流电能表说明书V1.1(中英)(2).pdf
+# This model does NOT have integer registers 0-3 (电压/电流/功率整数值).
+# Register table starts from address 4 (断线检测).
+# Float registers 50-55 are the primary measurement registers.
+DJSF_RN6_REALTIME = {
+    "voltage":       RegisterDef(50, 2, "float", 1.0, "V"),       # 50-51 Float V (一次值)
+    "current":       RegisterDef(52, 2, "float", 1.0, "A"),       # 52-53 Float A (一次值)
+    "power":         RegisterDef(54, 2, "float", 1.0, "kW"),      # 54-55 Float kW (一次值)
+    "energy_forward_total":  RegisterDef(12, 2, "uint32", 0.0001, "kWh"),  # 12-13 0.1Wh (一次侧)
+    "energy_reverse_total":  RegisterDef(14, 2, "uint32", 0.0001, "kWh"),  # 14-15 0.1Wh (一次侧)
+    "temperature":   RegisterDef(5, 1, "int16", 0.1, "°C"),       # 5 -400~1250 0.1℃
+}
+
+# Unified accessor — select register set by meter type
+def get_realtime_regs(meter_type: 'MeterType') -> dict:
+    if meter_type == MeterType.ADL400:
+        return ADL400_REALTIME
+    elif meter_type == MeterType.DJSF1352_RN_6:
+        return DJSF_RN6_REALTIME
+    else:  # DJSF1352_RN
+        return DJSF_RN_REALTIME
+
+# Keep backward compat alias (used in tests)
+DJSF_REALTIME = DJSF_RN_REALTIME
 
 # Batch read groups for DJSF — read contiguous registers in one request
 # to avoid inter-frame timing issues with slower meters.
@@ -363,10 +392,7 @@ def build_realtime_requests(meter: MeterInfo) -> list[tuple[str, bytes]]:
 
     Returns list of (param_name, request_frame).
     """
-    if meter.meter_type == MeterType.ADL400:
-        regs = ADL400_REALTIME
-    else:
-        regs = DJSF_REALTIME
+    regs = get_realtime_regs(meter.meter_type)
 
     result = []
     for name, rdef in regs.items():
@@ -439,7 +465,7 @@ def parse_realtime_response(param_name: str, frame: bytes,
     if data is None:
         return None
 
-    regs = ADL400_REALTIME if meter_type == MeterType.ADL400 else DJSF_REALTIME
+    regs = get_realtime_regs(meter_type)
     rdef = regs.get(param_name)
     if rdef is None:
         return None

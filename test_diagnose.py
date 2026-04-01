@@ -31,7 +31,7 @@ import serial
 from meter import (
     build_read_request, parse_read_response, parse_register_value,
     crc16_modbus, verify_crc,
-    ADL400_REALTIME, DJSF_REALTIME,
+    ADL400_REALTIME, DJSF_RN_REALTIME, DJSF_RN6_REALTIME, get_realtime_regs,
     build_daily_history_request, build_monthly_history_request_adl400,
     build_monthly_history_request_djsf,
     parse_adl400_history_block, parse_djsf_monthly_energy,
@@ -163,9 +163,14 @@ def safe_read(ser, addr, reg, count, timeout=0.5):
 
 def read_realtime(ser, addr, meter_type, timeout):
     """Read all realtime parameters. Returns list of (label, value_str)."""
-    is_ac = meter_type in ("ADL400",)
-    regs = ADL400_REALTIME if is_ac else DJSF_REALTIME
-    labels = ADL400_LABELS if is_ac else DJSF_LABELS
+    if meter_type == "ADL400":
+        mt = MeterType.ADL400
+    elif meter_type == "DJSF1352-RN-6":
+        mt = MeterType.DJSF1352_RN_6
+    else:
+        mt = MeterType.DJSF1352_RN
+    regs = get_realtime_regs(mt)
+    labels = ADL400_LABELS if mt == MeterType.ADL400 else DJSF_LABELS
 
     results = []
     for name, rdef in regs.items():

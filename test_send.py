@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from meter import (
     MeterType, METERS, METER_BY_ADDR,
-    ADL400_REALTIME, DJSF_REALTIME,
+    ADL400_REALTIME, DJSF_RN_REALTIME, DJSF_RN6_REALTIME, get_realtime_regs,
     build_read_request, parse_read_response, parse_register_value,
     crc16_modbus, verify_crc,
 )
@@ -209,7 +209,7 @@ def cmd_meter_query(args):
         print(f"{C.RED}Meter address {args.meter} not found. Valid: 1-8{C.END}")
         sys.exit(1)
 
-    regs = ADL400_REALTIME if meter.meter_type == MeterType.ADL400 else DJSF_REALTIME
+    regs = get_realtime_regs(meter.meter_type)
 
     if args.param == "all":
         params = list(regs.keys())
@@ -427,7 +427,7 @@ def cmd_list_params():
     print(f"\n{C.BOLD}=== Energy Meters (COM33) ==={C.END}\n")
 
     for m in METERS:
-        regs = ADL400_REALTIME if m.meter_type == MeterType.ADL400 else DJSF_REALTIME
+        regs = get_realtime_regs(m.meter_type)
         print(f"  {C.BOLD}[{m.slave_addr}] {m.name} ({m.model}){C.END}")
         for name, rdef in regs.items():
             print(f"    {name:<30s} reg=0x{rdef.address:04X}  "

@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from meter import (
     MeterType, METERS, METER_BY_ADDR,
-    ADL400_REALTIME, DJSF_REALTIME,
+    ADL400_REALTIME, get_realtime_regs,
     build_read_request, parse_read_response,
     parse_register_value, parse_adl400_history_block,
     parse_djsf_monthly_energy,
@@ -109,7 +109,7 @@ def send_recv(ser: serial.Serial, request: bytes,
 def test_realtime(ser: serial.Serial, addr: int, meter_type: MeterType) -> tuple[int, int]:
     """Test reading all realtime registers. Returns (pass_count, fail_count)."""
     subheader("实时数据 (Realtime)")
-    regs = ADL400_REALTIME if meter_type == MeterType.ADL400 else DJSF_REALTIME
+    regs = get_realtime_regs(meter_type)
     passed = 0
     failed = 0
 
