@@ -389,10 +389,10 @@ METERS: list[MeterInfo] = [
     MeterInfo("用户负载电表", MeterType.ADL400,          4, "05柜", "ADL400"),
     MeterInfo("整流侧电表",   MeterType.DJSF1352_RN_6,  5, "03柜", "DJSF1352-RN-6", "1路"),
     MeterInfo("电池柜电表",   MeterType.DJSF1352_RN,    6, "03柜", "DJSF1352-RN"),
-    MeterInfo("直流桩电表",   MeterType.DJSF1352_RN,    7, "03柜", "DJSF1352-RN",
-              "2路,直流桩1&直流桩2"),
-    MeterInfo("光伏电表",     MeterType.DJSF1352_RN,    8, "03柜", "DJSF1352-RN",
-              "2路,光伏1&光伏2"),
+    MeterInfo("直流充电桩1", MeterType.DJSF1352_RN,    8, "03柜", "DJSF1352-RN"),
+    MeterInfo("直流充电桩2", MeterType.DJSF1352_RN,    9, "03柜", "DJSF1352-RN"),
+    MeterInfo("光伏1",       MeterType.DJSF1352_RN,   10, "03柜", "DJSF1352-RN"),
+    MeterInfo("光伏2",       MeterType.DJSF1352_RN,   11, "03柜", "DJSF1352-RN"),
 ]
 
 METER_BY_ADDR: dict[int, MeterInfo] = {m.slave_addr: m for m in METERS}

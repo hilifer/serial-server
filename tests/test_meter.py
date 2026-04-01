@@ -380,20 +380,20 @@ class TestBuildMonthlyHistoryRequestDJSF:
 # ===========================================================================
 
 class TestMeterRegistry:
-    def test_8_meters(self):
-        assert len(METERS) == 8
+    def test_10_meters(self):
+        assert len(METERS) == 10
 
-    def test_addresses_1_to_8(self):
+    def test_addresses(self):
         addrs = sorted(m.slave_addr for m in METERS)
-        assert addrs == [1, 2, 3, 4, 5, 6, 7, 8]
+        assert addrs == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
 
     def test_4_adl400(self):
         ac = [m for m in METERS if m.meter_type == MeterType.ADL400]
         assert len(ac) == 4
 
-    def test_4_dc_meters(self):
+    def test_6_dc_meters(self):
         dc = [m for m in METERS if m.meter_type != MeterType.ADL400]
-        assert len(dc) == 4
+        assert len(dc) == 6
 
     def test_lookup_by_addr(self):
         m = METER_BY_ADDR[1]
