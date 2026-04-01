@@ -24,6 +24,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 from deps import ensure_deps
 ensure_deps()
 
+import logging
+logging.basicConfig(level=logging.WARNING)
+
 import serial
 from meter import (
     build_read_request, parse_read_response, parse_register_value,
