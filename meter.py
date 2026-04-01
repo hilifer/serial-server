@@ -85,44 +85,56 @@ def parse_read_response(frame: bytes) -> bytes | None:
     return data
 
 
+MAX_RETRIES = 3
+
+
+def _read_with_retry(serial_mgr, slave_addr: int, start_reg: int,
+                     count: int) -> bytes | None:
+    """Read registers with retry on CRC failure.
+
+    RS485 bus noise can cause random bit errors. Retry up to MAX_RETRIES
+    times before giving up.
+    """
+    for attempt in range(MAX_RETRIES):
+        req = build_read_request(slave_addr, start_reg, count)
+        resp = serial_mgr.send_and_receive_unlocked(req)
+        if resp:
+            data = parse_read_response(resp)
+            if data is not None:
+                return data
+        if attempt < MAX_RETRIES - 1:
+            logger.debug("Retry %d/%d for addr=%d reg=%d count=%d",
+                         attempt + 1, MAX_RETRIES, slave_addr, start_reg, count)
+    return None
+
+
 def safe_read_registers(serial_mgr, slave_addr: int, start_reg: int,
                         count: int) -> bytes | None:
-    """Read registers with automatic fallback to single-register reads.
+    """Read registers with retry and automatic fallback to single reads.
 
-    Some meters (e.g. DJSF1352-RN addr 6-8) don't support multi-register
-    reads (count>1). This function tries count>1 first; on failure, reads
-    one register at a time and combines the results.
+    Strategy:
+      1. Try multi-register read with retry (up to 3 attempts)
+      2. If still fails and count>1, try reading one register at a time
+         (each with retry), then combine results
 
-    Args:
-        serial_mgr: SerialManager instance (caller must hold lock)
-        slave_addr: Modbus slave address
-        start_reg: Starting register address
-        count: Number of registers to read
-
-    Returns:
-        Combined register data bytes, or None on error.
+    Handles both:
+      - RS485 noise (random CRC failures → fixed by retry)
+      - Meters that don't support multi-register reads (→ fixed by fallback)
     """
-    # Try normal multi-register read first
-    req = build_read_request(slave_addr, start_reg, count)
-    resp = serial_mgr.send_and_receive_unlocked(req)
-    if resp:
-        data = parse_read_response(resp)
-        if data is not None:
-            return data
+    # Try normal multi-register read with retry
+    data = _read_with_retry(serial_mgr, slave_addr, start_reg, count)
+    if data is not None:
+        return data
 
     # Fallback: read one register at a time
     if count <= 1:
-        return None  # Already tried count=1, still failed
+        return None
 
     logger.debug("Multi-register read failed for addr=%d reg=%d count=%d, "
                  "falling back to single reads", slave_addr, start_reg, count)
     combined = b""
     for i in range(count):
-        req = build_read_request(slave_addr, start_reg + i, 1)
-        resp = serial_mgr.send_and_receive_unlocked(req)
-        if not resp:
-            return None
-        data = parse_read_response(resp)
+        data = _read_with_retry(serial_mgr, slave_addr, start_reg + i, 1)
         if data is None:
             return None
         combined += data
