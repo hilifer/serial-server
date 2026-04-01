@@ -362,7 +362,25 @@ def read_full_meter(ser, addr, model, name, timeout):
 # ---------------------------------------------------------------------------
 
 def diagnose_meter(port, addr, baudrates, timeout):
-    header(f"诊断地址 {addr} ({port})")
+    meter_info = METER_BY_ADDR.get(addr)
+    if meter_info:
+        is_ac = meter_info.meter_type == MeterType.ADL400
+        model = meter_info.model
+        name = meter_info.name
+    else:
+        is_ac = addr <= 4  # guess
+        model = "ADL400" if is_ac else "DJSF1352-RN"
+        name = f"地址{addr}"
+
+    header(f"诊断 [{addr}] {name} ({model}) — {port}")
+
+    # Choose probe register based on meter type
+    if is_ac:
+        probe_reg, probe_count, probe_name = 0x0077, 1, "频率"
+        probe_scale, probe_unit = 0.01, "Hz"
+    else:
+        probe_reg, probe_count, probe_name = 5, 1, "温度"
+        probe_scale, probe_unit = 0.1, "°C"
 
     subheader("波特率扫描")
     working_baud = None
@@ -375,12 +393,12 @@ def diagnose_meter(port, addr, baudrates, timeout):
             fail(f"{baud} baud: 无法打开 ({e})")
             continue
 
-        data = read_reg(ser, addr, 5, 1, timeout)
+        data = read_reg(ser, addr, probe_reg, probe_count, timeout)
         ser.close()
 
         if data:
-            val = struct.unpack(">h", data)[0] * 0.1
-            ok(f"{baud} baud: 正常 (温度 = {val:.1f}°C)")
+            val = struct.unpack(">h", data)[0] * probe_scale
+            ok(f"{baud} baud: 正常 ({probe_name} = {val:.1f} {probe_unit})")
             working_baud = baud
             break
         else:
@@ -390,40 +408,67 @@ def diagnose_meter(port, addr, baudrates, timeout):
         print(f"\n  {C.RED}{C.BOLD}未找到有效波特率。请检查接线和地址设置。{C.END}")
         return
 
-    # Full register scan
+    # Register scan — use correct register set for meter type
     subheader(f"寄存器扫描 @ {working_baud} baud")
     ser = serial.Serial(port=port, baudrate=working_baud, bytesize=8,
                         parity="N", stopbits=1, timeout=timeout)
 
-    test_regs = [
-        (0, "电压值(整数)"), (1, "电压小数点"), (2, "电流值(整数)"),
-        (3, "电流小数点"), (4, "断线检测"), (5, "温度"),
-        (8, "功率值(整数)"), (9, "功率小数点"),
-        (12, "正向电能(hi)"), (13, "正向电能(lo)"),
-        (14, "反向电能(hi)"), (15, "反向电能(lo)"),
-        (50, "电压Float(hi)"), (51, "电压Float(lo)"),
-        (52, "电流Float(hi)"), (53, "电流Float(lo)"),
-        (54, "功率Float(hi)"), (55, "功率Float(lo)"),
-    ]
+    if is_ac:
+        test_regs = [
+            (0x0000, 2, "组合有功总电能",   "uint32", 0.01, "kWh"),
+            (0x000A, 2, "正向有功总电能",   "uint32", 0.01, "kWh"),
+            (0x0014, 2, "反向有功总电能",   "uint32", 0.01, "kWh"),
+            (0x0061, 1, "A相电压",        "uint16", 0.1,  "V"),
+            (0x0062, 1, "B相电压",        "uint16", 0.1,  "V"),
+            (0x0063, 1, "C相电压",        "uint16", 0.1,  "V"),
+            (0x0064, 1, "A相电流",        "uint16", 0.01, "A"),
+            (0x0065, 1, "B相电流",        "uint16", 0.01, "A"),
+            (0x0066, 1, "C相电流",        "uint16", 0.01, "A"),
+            (0x0077, 1, "频率",          "uint16", 0.01, "Hz"),
+            (0x0164, 2, "A相功率",        "int32",  0.001, "kW"),
+            (0x0166, 2, "B相功率",        "int32",  0.001, "kW"),
+            (0x0168, 2, "C相功率",        "int32",  0.001, "kW"),
+            (0x016A, 2, "总有功功率",      "int32",  0.001, "kW"),
+            (0x0172, 2, "总无功功率",      "int32",  0.001, "kvar"),
+            (0x017A, 2, "总视在功率",      "int32",  0.001, "kVA"),
+            (0x017F, 1, "功率因数",       "int16",  0.001, ""),
+        ]
+    else:
+        test_regs = [
+            (5,  1, "温度",            "int16",  0.1,    "°C"),
+            (12, 2, "正向有功总电能",    "uint32", 0.0001, "kWh"),
+            (14, 2, "反向有功总电能",    "uint32", 0.0001, "kWh"),
+            (50, 2, "电压(Float)",     "float",  1.0,    "V"),
+            (52, 2, "电流(Float)",     "float",  1.0,    "A"),
+            (54, 2, "功率(Float)",     "float",  1.0,    "kW"),
+        ]
 
     ok_count = 0
-    for reg, name in test_regs:
-        data = read_reg(ser, addr, reg, 1, timeout)
-        if data:
-            val = struct.unpack(">H", data)[0]
-            ok(f"reg {reg:>3d} ({name:<14s}): 0x{val:04X} ({val})")
+    for reg, count, reg_name, parser_name, scale, unit in test_regs:
+        data = safe_read(ser, addr, reg, count, timeout)
+        if data and len(data) >= count * 2:
+            raw = parse_register_value(data, RegisterDef(reg, count, parser_name, scale, unit))
+            ok(f"reg 0x{reg:04X} ({reg_name:<12s}): {raw:>14.4f} {unit}")
             ok_count += 1
         else:
-            fail(f"reg {reg:>3d} ({name:<14s}): 失败")
+            fail(f"reg 0x{reg:04X} ({reg_name:<12s}): 失败")
 
-    subheader("可靠性测试 (reg 5, 10次)")
-    s = sum(1 for _ in range(10) if read_reg(ser, addr, 5, 1, timeout))
+    # Reliability test
+    subheader(f"可靠性测试 ({probe_name}, 10次)")
+    s = sum(1 for _ in range(10) if read_reg(ser, addr, probe_reg, probe_count, timeout))
     color = C.GREEN if s >= 8 else C.YELLOW if s >= 5 else C.RED
     print(f"  {color}成功率: {s}/10 ({s*10}%){C.END}")
 
     ser.close()
 
-    header(f"诊断结果: 地址 {addr}")
+    # Full data read
+    header(f"完整数据: [{addr}] {name}")
+    ser = serial.Serial(port=port, baudrate=working_baud, bytesize=8,
+                        parity="N", stopbits=1, timeout=timeout)
+    read_full_meter(ser, addr, model, name, timeout)
+    ser.close()
+
+    header(f"诊断结果: [{addr}] {name} ({model})")
     print(f"  工作波特率: {C.GREEN}{working_baud}{C.END}")
     print(f"  可用寄存器: {C.GREEN}{ok_count}{C.END}/{len(test_regs)}")
     if s < 8:
