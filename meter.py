@@ -65,7 +65,7 @@ def parse_read_response(frame: bytes) -> bytes | None:
     Returns None on error (bad CRC, exception response, etc.).
     """
     if not verify_crc(frame):
-        logger.error("CRC check failed: %s", frame.hex())
+        logger.debug("CRC check failed: %s", frame.hex())
         return None
     if len(frame) < 5:
         logger.error("Frame too short: %s", frame.hex())
@@ -465,29 +465,57 @@ def parse_realtime_response(param_name: str, frame: bytes,
 
 
 def parse_adl400_history_block(data: bytes) -> dict | None:
-    """Parse a 34-register ADL400 history block (daily or monthly)."""
+    """Parse a 34-register ADL400 history block (daily or monthly).
+
+    Returns None if data is too short or all 0xFF (uninitialized).
+    """
     if len(data) < 68:  # 34 regs * 2 bytes
         logger.error("History block too short: %d bytes", len(data))
+        return None
+
+    # Check if block is uninitialized (all 0xFF)
+    if all(b == 0xFF for b in data[:28]):
         return None
 
     layout = ADL400_HISTORY_LAYOUT
     ym = parse_uint16(data, layout["time_ym"] * 2)
     dh = parse_uint16(data, layout["time_dh"] * 2)
 
-    year = (ym >> 8) + 2000
-    month = ym & 0xFF
-    day = dh >> 8
-    hour = dh & 0xFF
+    # Validate time fields
+    year_raw = ym >> 8
+    month_raw = ym & 0xFF
+    day_raw = dh >> 8
+    hour_raw = dh & 0xFF
+
+    if year_raw > 99 or month_raw > 12 or day_raw > 31 or hour_raw > 23:
+        return None  # Invalid time = uninitialized data
+
+    year = year_raw + 2000
+    month = month_raw
+    day = day_raw
+    hour = hour_raw
+
+    def safe_energy(offset_key):
+        val = parse_uint32(data, layout[offset_key] * 2)
+        if val == 0xFFFFFFFF:
+            return None  # uninitialized
+        return val * 0.01
 
     result = {
         "freeze_time": f"{year:04d}-{month:02d}-{day:02d} {hour:02d}:00",
-        "energy_active_total_kwh": parse_uint32(data, layout["energy_active_total"] * 2) * 0.01,
-        "energy_active_peak_kwh":  parse_uint32(data, layout["energy_active_peak"] * 2) * 0.01,
-        "energy_active_high_kwh":  parse_uint32(data, layout["energy_active_high"] * 2) * 0.01,
-        "energy_active_mid_kwh":   parse_uint32(data, layout["energy_active_mid"] * 2) * 0.01,
-        "energy_active_low_kwh":   parse_uint32(data, layout["energy_active_low"] * 2) * 0.01,
-        "energy_reactive_total_kvarh": parse_uint32(data, layout["energy_reactive_total"] * 2) * 0.01,
+        "energy_active_total_kwh": safe_energy("energy_active_total"),
+        "energy_active_peak_kwh":  safe_energy("energy_active_peak"),
+        "energy_active_high_kwh":  safe_energy("energy_active_high"),
+        "energy_active_mid_kwh":   safe_energy("energy_active_mid"),
+        "energy_active_low_kwh":   safe_energy("energy_active_low"),
+        "energy_reactive_total_kvarh": safe_energy("energy_reactive_total"),
     }
+
+    # If all energy values are None, the block is empty
+    energy_vals = [v for v in result.values() if isinstance(v, (int, float))]
+    if not energy_vals:
+        return None
+
     return result
 
 

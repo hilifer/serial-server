@@ -261,29 +261,30 @@ def print_realtime(results):
             print(f"  {C.RED}\u2717{C.END} {label:<16s} {'--':>14s} {unit}")
 
 
+def fmt_energy(val):
+    """Format energy value, handle None (uninitialized)."""
+    return f"{val:>10.2f}" if val is not None else "      未设置"
+
+
 def print_adl400_daily(daily_data):
     if not daily_data:
+        warn("日冻结: 无数据（电表可能未配置冻结功能）")
         return
     subheader("日冻结数据")
     for days_ago, block in daily_data:
         t = block["freeze_time"]
-        total = block["energy_active_total_kwh"]
-        peak = block["energy_active_peak_kwh"]
-        high = block["energy_active_high_kwh"]
-        mid = block["energy_active_mid_kwh"]
-        low = block["energy_active_low_kwh"]
-        reactive = block["energy_reactive_total_kvarh"]
         print(f"  {C.GREEN}\u2713{C.END} {days_ago}天前 ({t})")
-        print(f"      总有功: {total:>10.2f} kWh")
-        print(f"      尖:     {peak:>10.2f} kWh")
-        print(f"      峰:     {high:>10.2f} kWh")
-        print(f"      平:     {mid:>10.2f} kWh")
-        print(f"      谷:     {low:>10.2f} kWh")
-        print(f"      无功:   {reactive:>10.2f} kvarh")
+        print(f"      总有功: {fmt_energy(block['energy_active_total_kwh'])} kWh")
+        print(f"      尖:     {fmt_energy(block['energy_active_peak_kwh'])} kWh")
+        print(f"      峰:     {fmt_energy(block['energy_active_high_kwh'])} kWh")
+        print(f"      平:     {fmt_energy(block['energy_active_mid_kwh'])} kWh")
+        print(f"      谷:     {fmt_energy(block['energy_active_low_kwh'])} kWh")
+        print(f"      无功:   {fmt_energy(block['energy_reactive_total_kvarh'])} kvarh")
 
 
 def print_adl400_monthly(monthly_data):
     if not monthly_data:
+        warn("月冻结: 无数据（电表可能未配置冻结功能）")
         return
     subheader("月冻结数据")
     total_year = 0.0
@@ -294,10 +295,12 @@ def print_adl400_monthly(monthly_data):
         high = block["energy_active_high_kwh"]
         mid = block["energy_active_mid_kwh"]
         low = block["energy_active_low_kwh"]
-        total_year += total
+        if total is not None:
+            total_year += total
         print(f"  {C.GREEN}\u2713{C.END} {months_ago}月前 ({t})")
-        print(f"      总有功: {total:>10.2f} kWh  "
-              f"(尖:{peak:.2f} 峰:{high:.2f} 平:{mid:.2f} 谷:{low:.2f})")
+        print(f"      总有功: {fmt_energy(total)} kWh  "
+              f"(尖:{fmt_energy(peak)} 峰:{fmt_energy(high)} "
+              f"平:{fmt_energy(mid)} 谷:{fmt_energy(low)})")
 
     subheader("年汇总 (累加近12月)")
     print(f"  总有功电能: {C.BOLD}{total_year:>10.2f} kWh{C.END}")
