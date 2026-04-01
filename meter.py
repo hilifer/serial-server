@@ -216,16 +216,28 @@ ADL400_REALTIME = {
     "apparent_power_total": RegisterDef(0x082A, 2, "float", 1.0, "kVA"),
     "power_factor": RegisterDef(0x0832, 2, "float", 1.0, ""),
     "frequency":   RegisterDef(0x0834, 2, "float", 1.0, "Hz"),
-    # Energy: primary side, UINT32, unit 0.01kWh (at 0x0842+)
-    "energy_combined_total": RegisterDef(0x0842, 2, "uint32", 0.01, "kWh"),
-    "energy_forward_total":  RegisterDef(0x0846, 2, "uint32", 0.01, "kWh"),
-    "energy_reverse_total":  RegisterDef(0x084E, 2, "uint32", 0.01, "kWh"),
+    # Energy: primary side, UINT32, unit 0.1kWh
+    "energy_combined_total":     RegisterDef(0x0842, 2, "uint32", 0.1, "kWh"),   # 组合有功总
+    "energy_combined_peak":      RegisterDef(0x0844, 2, "uint32", 0.1, "kWh"),   # 组合有功尖
+    "energy_combined_high":      RegisterDef(0x0846, 2, "uint32", 0.1, "kWh"),   # 组合有功峰
+    "energy_combined_mid":       RegisterDef(0x0848, 2, "uint32", 0.1, "kWh"),   # 组合有功平
+    "energy_combined_low":       RegisterDef(0x084A, 2, "uint32", 0.1, "kWh"),   # 组合有功谷
+    "energy_forward_total":      RegisterDef(0x084C, 2, "uint32", 0.1, "kWh"),   # 正向总有功
+    "energy_forward_peak":       RegisterDef(0x084E, 2, "uint32", 0.1, "kWh"),   # 正向有功尖
+    "energy_forward_high":       RegisterDef(0x0850, 2, "uint32", 0.1, "kWh"),   # 正向有功峰
+    "energy_forward_mid":        RegisterDef(0x0852, 2, "uint32", 0.1, "kWh"),   # 正向有功平
+    "energy_forward_low":        RegisterDef(0x0854, 2, "uint32", 0.1, "kWh"),   # 正向有功谷
+    "energy_reverse_total":      RegisterDef(0x0856, 2, "uint32", 0.1, "kWh"),   # 反向总有功
+    "energy_reverse_peak":       RegisterDef(0x0858, 2, "uint32", 0.1, "kWh"),   # 反向有功尖
+    "energy_reverse_high":       RegisterDef(0x085A, 2, "uint32", 0.1, "kWh"),   # 反向有功峰
+    "energy_reverse_mid":        RegisterDef(0x085C, 2, "uint32", 0.1, "kWh"),   # 反向有功平
+    "energy_reverse_low":        RegisterDef(0x085E, 2, "uint32", 0.1, "kWh"),   # 反向有功谷
 }
 
-# Ratio registers for ADL400 (read-only check)
+# Ratio registers for ADL400
 ADL400_RATIO_REGS = {
-    "pt": RegisterDef(0x008E, 1, "uint16", 1.0, ""),  # 电压变比 PT
-    "ct": RegisterDef(0x008F, 1, "uint16", 1.0, ""),  # 电流变比 CT
+    "pt": RegisterDef(0x008D, 1, "uint16", 1.0, ""),  # 电压变比 PT
+    "ct": RegisterDef(0x008E, 1, "uint16", 1.0, ""),  # 电流变比 CT
 }
 
 # Batch reads no longer used for ADL400 (primary-side floats are not contiguous

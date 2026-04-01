@@ -59,9 +59,21 @@ ADL400_LABELS = {
     "apparent_power_total": "总视在功率(一次侧)",
     "power_factor": "总功率因数",
     "frequency": "频率",
-    "energy_forward_total": "正向有功总电能",
-    "energy_reverse_total": "反向有功总电能",
     "energy_combined_total": "组合有功总电能",
+    "energy_combined_peak": "组合有功尖电能",
+    "energy_combined_high": "组合有功峰电能",
+    "energy_combined_mid": "组合有功平电能",
+    "energy_combined_low": "组合有功谷电能",
+    "energy_forward_total": "正向有功总电能",
+    "energy_forward_peak": "正向有功尖电能",
+    "energy_forward_high": "正向有功峰电能",
+    "energy_forward_mid": "正向有功平电能",
+    "energy_forward_low": "正向有功谷电能",
+    "energy_reverse_total": "反向有功总电能",
+    "energy_reverse_peak": "反向有功尖电能",
+    "energy_reverse_high": "反向有功峰电能",
+    "energy_reverse_mid": "反向有功平电能",
+    "energy_reverse_low": "反向有功谷电能",
 }
 
 DJSF_LABELS = {
@@ -415,8 +427,8 @@ def diagnose_meter(port, addr, baudrates, timeout):
     if is_ac:
         test_regs = [
             # === 变比 ===
-            (0x008E, 1, "电压变比(PT)",       "uint16", 1.0,    ""),
-            (0x008F, 1, "电流变比(CT)",       "uint16", 1.0,    ""),
+            (0x008D, 1, "电压变比(PT)",       "uint16", 1.0,    ""),
+            (0x008E, 1, "电流变比(CT)",       "uint16", 1.0,    ""),
             # === 二次侧 (原始值, 不含变比) ===
             (0x0061, 1, "A相电压(二次侧)",     "uint16", 0.1,    "V"),
             (0x0062, 1, "B相电压(二次侧)",     "uint16", 0.1,    "V"),
@@ -432,6 +444,14 @@ def diagnose_meter(port, addr, baudrates, timeout):
             (0x000A, 2, "正向电能(二次侧)",    "uint32", 0.01,   "kWh"),
             (0x0014, 2, "反向电能(二次侧)",    "uint32", 0.01,   "kWh"),
             (0x0000, 2, "组合电能(二次侧)",    "uint32", 0.01,   "kWh"),
+            # === 一次侧电能 (UINT32, 0.1kWh) ===
+            (0x0842, 2, "组合有功总(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x0844, 2, "组合有功尖(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x0846, 2, "组合有功峰(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x0848, 2, "组合有功平(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x084A, 2, "组合有功谷(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x084C, 2, "正向总有功(一次侧)",   "uint32", 0.1,    "kWh"),
+            (0x0856, 2, "反向总有功(一次侧)",   "uint32", 0.1,    "kWh"),
             # === 一次侧 (含变比, Float) ===
             (0x0800, 2, "A相电压(一次侧)",     "float",  1.0,    "V"),
             (0x0802, 2, "B相电压(一次侧)",     "float",  1.0,    "V"),

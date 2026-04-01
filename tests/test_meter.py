@@ -211,11 +211,12 @@ class TestParseRealtimeResponse:
         assert result["unit"] == "V"
 
     def test_adl400_energy(self):
-        data = b"\x00\x00\x30\x26"  # 12326 -> 123.26 kWh
+        # Primary side energy: UINT32, unit 0.1kWh
+        data = b"\x00\x00\x02\x30"  # 560 -> 560 * 0.1 = 56.0 kWh
         frame = self._make_response(data)
         result = parse_realtime_response("energy_combined_total", frame, MeterType.ADL400)
         assert result is not None
-        assert abs(result["value"] - 123.26) < 0.01
+        assert abs(result["value"] - 56.0) < 0.1
 
     def test_djsf_voltage_float(self):
         data = struct.pack(">f", 380.5)
