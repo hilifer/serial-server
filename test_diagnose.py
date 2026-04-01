@@ -237,15 +237,15 @@ def read_djsf_monthly(ser, addr, months, timeout):
             req = build_monthly_history_request_djsf(addr, m, direction)
             if req is None:
                 continue
-            data = safe_read(ser, addr,
-                             req[2] << 8 | req[3],  # extract reg from frame
-                             2, timeout)
-            if data:
-                val = struct.unpack(">I", data)[0] / 1000.0
-                if direction == "forward":
-                    fwd = val
-                else:
-                    rev = val
+            resp = send_recv(ser, req, timeout)
+            if resp:
+                data = parse_read_response(resp)
+                if data:
+                    fwd_or_rev = parse_djsf_monthly_energy(data)
+                    if direction == "forward":
+                        fwd = fwd_or_rev
+                    else:
+                        rev = fwd_or_rev
         if fwd is not None or rev is not None:
             results.append((m, fwd, rev))
     return results
@@ -363,14 +363,12 @@ def read_full_meter(ser, addr, model, name, timeout):
 
 def diagnose_meter(port, addr, baudrates, timeout):
     meter_info = METER_BY_ADDR.get(addr)
-    if meter_info:
-        is_ac = meter_info.meter_type == MeterType.ADL400
-        model = meter_info.model
-        name = meter_info.name
-    else:
-        is_ac = addr <= 4  # guess
-        model = "ADL400" if is_ac else "DJSF1352-RN"
-        name = f"地址{addr}"
+    if not meter_info:
+        fail(f"地址 {addr} 未在配置中定义 (有效地址: {list(METER_BY_ADDR.keys())})")
+        return
+    is_ac = meter_info.meter_type == MeterType.ADL400
+    model = meter_info.model
+    name = meter_info.name
 
     header(f"诊断 [{addr}] {name} ({model}) — {port}")
 

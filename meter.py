@@ -140,22 +140,6 @@ def safe_read_registers(serial_mgr, slave_addr: int, start_reg: int,
         combined += data
 
     return combined
-    if len(frame) < 5:
-        logger.error("Frame too short: %s", frame.hex())
-        return None
-    func_code = frame[1]
-    if func_code & 0x80:  # exception response
-        error_code = frame[2]
-        logger.error("Modbus exception response: func=0x%02X error=%d",
-                      func_code, error_code)
-        return None
-    byte_count = frame[2]
-    data = frame[3:3 + byte_count]
-    if len(data) != byte_count:
-        logger.error("Data length mismatch: expected %d got %d",
-                      byte_count, len(data))
-        return None
-    return data
 
 
 # ---------------------------------------------------------------------------
