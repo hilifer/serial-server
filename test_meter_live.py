@@ -44,13 +44,7 @@ from meter import (
 # Color output helpers
 # ---------------------------------------------------------------------------
 
-class Color:
-    GREEN = "\033[92m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    CYAN = "\033[96m"
-    BOLD = "\033[1m"
-    END = "\033[0m"
+from colors import C as Color
 
 
 def ok(msg: str):

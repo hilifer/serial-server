@@ -33,14 +33,7 @@ from parking import (
 )
 
 
-class C:
-    GREEN = "\033[92m"
-    RED = "\033[91m"
-    YELLOW = "\033[93m"
-    CYAN = "\033[96m"
-    BOLD = "\033[1m"
-    DIM = "\033[2m"
-    END = "\033[0m"
+from colors import C
 
 
 def ok(msg):
