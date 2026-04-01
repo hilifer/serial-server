@@ -24,6 +24,7 @@ from meter import (
     ADL400_REALTIME, ADL400_BATCH_READS,
     DJSF_REALTIME, DJSF_BATCH_READS, DJSF_MONTHLY_MAX,
     build_read_request, parse_read_response, parse_register_value,
+    safe_read_registers,
     build_daily_history_request,
     build_monthly_history_request_adl400,
     build_monthly_history_request_djsf,
@@ -133,17 +134,16 @@ def get_realtime(addr: int):
 
     with ser.lock():
         for name, rdef in regs.items():
-            req = build_read_request(meter.slave_addr, rdef.address, rdef.count)
-            response = ser.send_and_receive_unlocked(req)
-            if not response:
+            data = safe_read_registers(ser, meter.slave_addr,
+                                       rdef.address, rdef.count)
+            if data is None:
                 results[name] = {"value": None, "unit": rdef.unit, "error": "no response"}
                 continue
-            data = parse_read_response(response)
-            if data is None:
+            try:
+                value = parse_register_value(data, rdef)
+                results[name] = {"value": value, "unit": rdef.unit}
+            except Exception:
                 results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
-                continue
-            value = parse_register_value(data, rdef)
-            results[name] = {"value": value, "unit": rdef.unit}
 
     return jsonify({
         "address": addr,

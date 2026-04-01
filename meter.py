@@ -85,6 +85,67 @@ def parse_read_response(frame: bytes) -> bytes | None:
     return data
 
 
+def safe_read_registers(serial_mgr, slave_addr: int, start_reg: int,
+                        count: int) -> bytes | None:
+    """Read registers with automatic fallback to single-register reads.
+
+    Some meters (e.g. DJSF1352-RN addr 6-8) don't support multi-register
+    reads (count>1). This function tries count>1 first; on failure, reads
+    one register at a time and combines the results.
+
+    Args:
+        serial_mgr: SerialManager instance (caller must hold lock)
+        slave_addr: Modbus slave address
+        start_reg: Starting register address
+        count: Number of registers to read
+
+    Returns:
+        Combined register data bytes, or None on error.
+    """
+    # Try normal multi-register read first
+    req = build_read_request(slave_addr, start_reg, count)
+    resp = serial_mgr.send_and_receive_unlocked(req)
+    if resp:
+        data = parse_read_response(resp)
+        if data is not None:
+            return data
+
+    # Fallback: read one register at a time
+    if count <= 1:
+        return None  # Already tried count=1, still failed
+
+    logger.debug("Multi-register read failed for addr=%d reg=%d count=%d, "
+                 "falling back to single reads", slave_addr, start_reg, count)
+    combined = b""
+    for i in range(count):
+        req = build_read_request(slave_addr, start_reg + i, 1)
+        resp = serial_mgr.send_and_receive_unlocked(req)
+        if not resp:
+            return None
+        data = parse_read_response(resp)
+        if data is None:
+            return None
+        combined += data
+
+    return combined
+    if len(frame) < 5:
+        logger.error("Frame too short: %s", frame.hex())
+        return None
+    func_code = frame[1]
+    if func_code & 0x80:  # exception response
+        error_code = frame[2]
+        logger.error("Modbus exception response: func=0x%02X error=%d",
+                      func_code, error_code)
+        return None
+    byte_count = frame[2]
+    data = frame[3:3 + byte_count]
+    if len(data) != byte_count:
+        logger.error("Data length mismatch: expected %d got %d",
+                      byte_count, len(data))
+        return None
+    return data
+
+
 # ---------------------------------------------------------------------------
 # Data parsing helpers
 # ---------------------------------------------------------------------------
