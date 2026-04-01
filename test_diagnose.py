@@ -23,7 +23,11 @@ from deps import ensure_deps
 ensure_deps()
 
 import serial
-from meter import build_read_request, parse_read_response, crc16_modbus, verify_crc
+from meter import (
+    build_read_request, parse_read_response, parse_register_value,
+    crc16_modbus, verify_crc,
+    ADL400_REALTIME, DJSF_REALTIME,
+)
 
 
 class C:
@@ -250,9 +254,50 @@ def diagnose_meter(port, addr, baudrates, timeout):
         print(f"    - Other devices on the same bus")
 
 
+def read_meter_data(ser, addr, meter_type, timeout):
+    """Read all realtime data from a meter. Returns dict of results."""
+    regs = ADL400_REALTIME if meter_type == "ADL400" else DJSF_REALTIME
+    results = {}
+    retries = 3
+
+    for name, rdef in regs.items():
+        value = None
+        for attempt in range(retries):
+            if rdef.count > 1:
+                # Try multi-register read, fallback to single reads
+                success, resp, data = test_register(ser, addr, rdef.address,
+                                                     rdef.count, timeout)
+                if success:
+                    value = parse_register_value(data, rdef)
+                    break
+                # Fallback: read one at a time and combine
+                combined = b""
+                all_ok = True
+                for i in range(rdef.count):
+                    s, r, d = test_register(ser, addr, rdef.address + i, 1, timeout)
+                    if s:
+                        combined += d
+                    else:
+                        all_ok = False
+                        break
+                if all_ok and len(combined) == rdef.count * 2:
+                    value = parse_register_value(combined, rdef)
+                    break
+            else:
+                success, resp, data = test_register(ser, addr, rdef.address,
+                                                     rdef.count, timeout)
+                if success:
+                    value = parse_register_value(data, rdef)
+                    break
+
+        results[name] = {"value": value, "unit": rdef.unit}
+
+    return results
+
+
 def scan_all(port, baudrate, timeout):
-    """Quick scan all 8 meter addresses."""
-    header(f"Quick scan: {port} @ {baudrate} baud")
+    """Scan all 8 meters and print full realtime data for online ones."""
+    header(f"Full scan: {port} @ {baudrate} baud")
 
     try:
         ser = serial.Serial(port=port, baudrate=baudrate, bytesize=8,
@@ -262,36 +307,63 @@ def scan_all(port, baudrate, timeout):
         return
 
     meters = [
-        (1, "ADL400", "电网侧电表", 0x0077, "frequency"),
-        (2, "ADL400", "逆变侧电表", 0x0077, "frequency"),
-        (3, "ADL400", "交流桩电表", 0x0077, "frequency"),
-        (4, "ADL400", "用户负载电表", 0x0077, "frequency"),
-        (5, "DJSF1352-RN-6", "整流侧电表", 5, "temperature"),
-        (6, "DJSF1352-RN", "电池柜电表", 5, "temperature"),
-        (7, "DJSF1352-RN", "直流桩电表", 5, "temperature"),
-        (8, "DJSF1352-RN", "光伏电表", 5, "temperature"),
+        (1, "ADL400", "电网侧电表"),
+        (2, "ADL400", "逆变侧电表"),
+        (3, "ADL400", "交流桩电表"),
+        (4, "ADL400", "用户负载电表"),
+        (5, "DJSF1352-RN-6", "整流侧电表"),
+        (6, "DJSF1352-RN", "电池柜电表"),
+        (7, "DJSF1352-RN", "直流桩电表"),
+        (8, "DJSF1352-RN", "光伏电表"),
     ]
 
     online = 0
-    for addr, model, name, probe_reg, probe_name in meters:
-        success, resp, data = test_register(ser, addr, probe_reg, 1, timeout)
+    offline = 0
+    error = 0
 
-        if success:
-            online += 1
-            if probe_name == "temperature":
-                val = struct.unpack(">h", data)[0] * 0.1
-                ok(f"[{addr}] {name} ({model}): {probe_name} = {val:.1f}°C")
-            elif probe_name == "frequency":
-                val = struct.unpack(">H", data)[0] * 0.01
-                ok(f"[{addr}] {name} ({model}): {probe_name} = {val:.2f} Hz")
-        elif resp:
-            warn(f"[{addr}] {name} ({model}): response but CRC FAIL ({resp.hex()})")
+    for addr, model, name in meters:
+        # Quick probe first
+        if model == "ADL400":
+            probe_reg, probe_count = 0x0077, 1  # frequency
         else:
-            fail(f"[{addr}] {name} ({model}): no response")
+            probe_reg, probe_count = 5, 1  # temperature
+
+        success, resp, data = test_register(ser, addr, probe_reg,
+                                             probe_count, timeout)
+
+        if not success and not resp:
+            fail(f"[{addr}] {name} ({model}): 无响应")
+            offline += 1
+            continue
+        elif not success:
+            warn(f"[{addr}] {name} ({model}): CRC失败 ({resp.hex()})")
+            error += 1
+            continue
+
+        # Online — read all data
+        online += 1
+        header(f"[{addr}] {name} ({model})")
+
+        results = read_meter_data(ser, addr, model, timeout)
+
+        for param_name, info in results.items():
+            val = info["value"]
+            unit = info["unit"]
+            if val is not None:
+                if isinstance(val, float):
+                    print(f"  {C.GREEN}\u2713{C.END} {param_name:<28s} {val:>12.4f} {unit}")
+                else:
+                    print(f"  {C.GREEN}\u2713{C.END} {param_name:<28s} {val:>12} {unit}")
+            else:
+                print(f"  {C.RED}\u2717{C.END} {param_name:<28s} {'--':>12} {unit}")
 
     ser.close()
 
-    print(f"\n  Online: {C.GREEN}{online}{C.END}/8")
+    # Summary
+    header("Summary")
+    print(f"  在线 (数据正常): {C.GREEN}{online}{C.END}")
+    print(f"  离线 (无响应):   {C.RED}{offline}{C.END}")
+    print(f"  异常 (CRC失败):  {C.YELLOW}{error}{C.END}")
 
 
 def main():
