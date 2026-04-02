@@ -58,16 +58,16 @@ function renderFlowDiagram() {
   const H = wrap.clientHeight || 500;
   const CX = W / 2; // exact center axis
 
-  // Symmetric spacing from center
-  const topY = H * 0.16;       // top row y
-  const midY = H * 0.46;       // center box y
-  const botY = H * 0.80;       // bottom row y
-  const d1 = W * 0.30;         // outer nodes offset (电网, 储能)
-  const d2 = W * 0.12;         // inner nodes offset (光伏1, 光伏2)
-  const d3 = W * 0.26;         // bottom outer offset (直流桩, 办公室)
-  const R = 42;                 // top node radius
-  const RB = 48;                // bottom node radius
-  const rectHW = 62, rectHH = 26; // center rect half-size
+  // Symmetric spacing — generous, breathing room
+  const topY = H * 0.14;       // top row y
+  const midY = H * 0.45;       // center box y
+  const botY = H * 0.82;       // bottom row y
+  const d1 = W * 0.32;         // outer nodes offset (电网, 储能)
+  const d2 = W * 0.13;         // inner nodes offset (光伏1, 光伏2)
+  const d3 = W * 0.28;         // bottom outer offset (直流桩, 办公室)
+  const R = Math.min(55, H * 0.1);    // top node radius — large
+  const RB = Math.min(62, H * 0.11);  // bottom node radius — larger
+  const rectHW = 72, rectHH = 34;     // center rect half-size — bigger
 
   // Strictly symmetric node positions
   const N = {
@@ -94,7 +94,7 @@ function renderFlowDiagram() {
   function pvToCenter(node) {
     const x = node.x, y1 = node.y + R, y2 = midY - rectHH;
     // 先垂直下到汇合高度，再水平到CX，再垂直下到光储系统顶部
-    const junctY = y1 + (y2 - y1) * 0.35;
+    const junctY = y1 + (y2 - y1) * 0.4;
     if (Math.abs(x - CX) < 3) return `M${x},${y1} L${x},${y2}`;
     return `M${x},${y1} L${x},${junctY} L${CX},${junctY} L${CX},${y2}`;
   }
@@ -102,7 +102,7 @@ function renderFlowDiagram() {
   // 下方节点: 光储系统底部 → 垂直下到分叉高度 → 水平到节点x → 垂直下到节点顶部
   function centerToBot(node) {
     const x = node.x, y1 = midY + rectHH, y2 = node.y - node.r;
-    const junctY = y1 + (y2 - y1) * 0.4;
+    const junctY = y1 + (y2 - y1) * 0.45;
     if (Math.abs(x - CX) < 3) return `M${CX},${y1} L${x},${y2}`;
     return `M${CX},${y1} L${CX},${junctY} L${x},${junctY} L${x},${y2}`;
   }
@@ -132,19 +132,19 @@ function renderFlowDiagram() {
   Object.entries(N).forEach(([k, n]) => {
     svg += `<g class="flow-node-group" style="--node-color:${n.bc}">`;
     if (n.isRect) {
-      svg += `<rect x="${n.x-rectHW}" y="${n.y-rectHH}" width="${rectHW*2}" height="${rectHH*2}" rx="5"
-        fill="rgba(0,20,60,0.9)" stroke="${n.bc}" stroke-width="2" stroke-dasharray="5 3"/>`;
-      svg += `<text x="${n.x}" y="${n.y+5}" text-anchor="middle" font-size="14" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
+      svg += `<rect x="${n.x-rectHW}" y="${n.y-rectHH}" width="${rectHW*2}" height="${rectHH*2}" rx="8"
+        fill="rgba(0,20,60,0.9)" stroke="${n.bc}" stroke-width="2" stroke-dasharray="6 4"/>`;
+      svg += `<text x="${n.x}" y="${n.y+6}" text-anchor="middle" font-size="16" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
     } else {
       svg += `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="rgba(0,20,60,0.9)" stroke="${n.bc}" stroke-width="2"/>`;
-      svg += `<text x="${n.x}" y="${n.y-6}" text-anchor="middle" font-size="26">${n.icon}</text>`;
-      svg += `<text x="${n.x}" y="${n.y+18}" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">${n.name}</text>`;
+      svg += `<text x="${n.x}" y="${n.y - n.r*0.12}" text-anchor="middle" font-size="${n.r > 50 ? 34 : 30}">${n.icon}</text>`;
+      svg += `<text x="${n.x}" y="${n.y + n.r*0.48}" text-anchor="middle" font-size="13" fill="#fff" font-weight="bold">${n.name}</text>`;
     }
     svg += `</g>`;
   });
 
-  // Power labels
-  const lg = 16;
+  // Power labels — offset below top nodes, above bottom nodes
+  const lg = 14;
   svg += `<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
   svg += `<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+14}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
   svg += `<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+28}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
