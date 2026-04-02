@@ -102,26 +102,30 @@
             <span class="solar-unit">kW</span>
           </div>
         </div>
-        <div class="solar-vi-row">
-          <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv1Voltage">--V</div></div>
-          <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv1Current">--A</div></div>
+        <div class="pv-vi-dual">
+          <div class="pv-vi-group">
+            <div class="pv-vi-title">光伏1</div>
+            <div class="pv-vi-boxes">
+              <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv1Voltage">--V</div></div>
+              <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv1Current">--A</div></div>
+            </div>
+          </div>
+          <div class="pv-vi-group">
+            <div class="pv-vi-title">光伏2</div>
+            <div class="pv-vi-boxes">
+              <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv2Voltage">--V</div></div>
+              <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv2Current">--A</div></div>
+            </div>
+          </div>
         </div>
         <div class="sub-section">
           <h5>光伏1</h5>
-          <div class="solar-vi-row" style="margin-bottom:8px">
-            <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv1V2">--V</div></div>
-            <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv1I2">--A</div></div>
-          </div>
           <div class="metric-grid">
             <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="pv1MonthE">--</span></div>
             <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value" id="pv1YearE">--</span></div>
             <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="pv1TotalE">--</span></div>
           </div>
           <h5>光伏2</h5>
-          <div class="solar-vi-row" style="margin-bottom:8px">
-            <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv2V2">--V</div></div>
-            <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv2I2">--A</div></div>
-          </div>
           <div class="metric-grid">
             <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="pv2MonthE">--</span></div>
             <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value" id="pv2YearE">--</span></div>

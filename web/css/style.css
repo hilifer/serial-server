@@ -199,6 +199,13 @@ a { color:inherit; text-decoration:none; }
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .solar-unit { font-size: 18px; color: rgba(255,255,255,0.8); }
+/* Dual PV voltage/current — two groups side by side */
+.pv-vi-dual { display: flex; gap: 14px; margin-bottom: 12px; }
+.pv-vi-group { flex: 1; }
+.pv-vi-title { font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 5px; text-align: center; }
+.pv-vi-boxes { display: flex; gap: 8px; }
+.pv-vi-boxes .vi-box { flex: 1; padding: 6px 4px; }
+
 .solar-vi-row { display: flex; gap: 20px; margin-bottom: 15px; }
 .vi-box {
   display: flex; flex-direction: column; align-items: center;
