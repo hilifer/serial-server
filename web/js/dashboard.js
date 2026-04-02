@@ -1,6 +1,6 @@
 /**
  * Energy dashboard — matches test2.vue from lizi.
- * SVG-based power flow diagram + real meter data.
+ * SVG flow diagram with step-type paths and real meter data.
  */
 
 // ---- Clock ----
@@ -26,195 +26,221 @@ function setText(id, text) {
   if (el) el.textContent = text;
 }
 
-// ---- SVG Flow Diagram (matches test2.vue VueFlow) ----
-let flowAnimOffset = 0;
-let flowAnimId = null;
-
+// ---- SVG Flow Diagram ----
 function renderFlowDiagram() {
   const wrap = document.getElementById('flowDiagram');
   if (!wrap) return;
-
   const W = wrap.clientWidth || 800;
   const H = wrap.clientHeight || 500;
-  const cx = W / 2, cy = H / 2;
 
-  // Node positions (matching test2.vue layout)
-  const nodes = {
-    grid:    { x: cx - 200, y: cy - 140, icon: '⚡', name: '电网', color: '#ff4444' },
-    pv1:     { x: cx - 60,  y: cy - 140, icon: '☀️', name: '光伏1', color: '#ffaa00' },
-    pv2:     { x: cx + 60,  y: cy - 140, icon: '☀️', name: '光伏2', color: '#ffaa00' },
-    storage: { x: cx + 200, y: cy - 140, icon: '🔋', name: '储能', color: '#00ccff' },
-    center:  { x: cx,       y: cy + 10,  icon: '',   name: '光储系统', color: '#3b82f6', isRect: true },
-    dcPile:  { x: cx - 160, y: cy + 180, icon: '🚗', name: '直流充电桩', color: '#ff6600' },
-    acPile:  { x: cx,       y: cy + 180, icon: '🚗', name: '交流充电桩', color: '#ff6600' },
-    office:  { x: cx + 170, y: cy + 180, icon: '💻', name: '办公室', color: '#6699cc' },
-  };
+  // Node layout — top row: grid, pv1, pv2, storage; center: hub; bottom: dc, ac, office
+  const topY = H * 0.18;
+  const centerY = H * 0.48;
+  const bottomY = H * 0.82;
 
-  // Edges (source -> target)
+  const nodes = [
+    { id:'grid',    x: W*0.14, y: topY,    icon:'⚡', name:'电网',      borderColor:'#ff6b6b', labelColor:'#ff8c00', r: 42 },
+    { id:'pv1',     x: W*0.38, y: topY,    icon:'☀️', name:'光伏1',     borderColor:'#ff9500', labelColor:'#ff9500', r: 42 },
+    { id:'pv2',     x: W*0.58, y: topY,    icon:'☀️', name:'光伏2',     borderColor:'#ff9500', labelColor:'#ff9500', r: 42 },
+    { id:'storage', x: W*0.82, y: topY,    icon:'🔋', name:'储能',      borderColor:'#00ffff', labelColor:'#00ffff', r: 42 },
+    { id:'center',  x: W*0.48, y: centerY, icon:'',   name:'光储系统',  borderColor:'#3b82f6', isRect: true },
+    { id:'dc',      x: W*0.18, y: bottomY, icon:'🚗', name:'直流充电桩', borderColor:'#ff9500', labelColor:'#ff9500', r: 42 },
+    { id:'ac',      x: W*0.48, y: bottomY, icon:'🚗', name:'交流充电桩', borderColor:'#ff9500', labelColor:'#ff9500', r: 42 },
+    { id:'office',  x: W*0.78, y: bottomY, icon:'💻', name:'办公室',    borderColor:'#4ecdc4', labelColor:'#8899aa', r: 42 },
+  ];
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.id] = n);
+
+  // Edges: step-type paths
   const edges = [
-    { from: 'grid',    to: 'center', animated: false, dashed: true },
-    { from: 'pv1',     to: 'center', animated: true },
-    { from: 'pv2',     to: 'center', animated: true },
-    { from: 'center',  to: 'storage', animated: true },
-    { from: 'center',  to: 'dcPile',  animated: true },
-    { from: 'center',  to: 'acPile',  animated: true },
-    { from: 'center',  to: 'office',  animated: true },
+    { from:'grid',   to:'center', dashed: true },
+    { from:'pv1',    to:'center', animated: true },
+    { from:'pv2',    to:'center', animated: true },
+    { from:'center', to:'storage', animated: true },
+    { from:'center', to:'dc',      animated: true },
+    { from:'center', to:'ac',      animated: true },
+    { from:'center', to:'office',  animated: true },
   ];
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
-  svg += `<defs>
-    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-      <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.6"/>
-    </marker>
-  </defs>`;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`;
 
-  // Draw edges (step-style paths)
+  // Draw step-path edges
   edges.forEach(e => {
-    const s = nodes[e.from], t = nodes[e.to];
+    const s = nodeMap[e.from], t = nodeMap[e.to];
+    const R = 42;
     let path;
-    if (s.y < t.y) {
-      // top to bottom: go down from source, then horizontal, then down to target
+
+    if (s.id === 'center') {
+      // center → bottom nodes: go down from center, then horizontal to target, then down
+      const startY = s.y + 30;
       const midY = (s.y + t.y) / 2;
-      path = `M${s.x},${s.y + 40} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y - 40}`;
-    } else if (s.y > t.y) {
+      path = `M${s.x},${startY} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y - R}`;
+    } else if (t.id === 'center') {
+      // top nodes → center: go down from node, then horizontal to center, then down to center
+      const startY = s.y + R;
       const midY = (s.y + t.y) / 2;
-      path = `M${s.x},${s.y - 40} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y + 40}`;
+      if (Math.abs(s.x - t.x) < 5) {
+        // Directly above — straight line
+        path = `M${s.x},${startY} L${t.x},${t.y - 30}`;
+      } else {
+        path = `M${s.x},${startY} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y - 30}`;
+      }
     } else {
-      // horizontal
-      path = `M${s.x + 50},${s.y} L${t.x - 50},${t.y}`;
+      // center → storage (horizontal right)
+      const startX = s.x + 55;
+      path = `M${startX},${s.y} L${t.x - R},${t.y}`;
     }
+
     const cls = e.animated ? 'flow-edge animated' : 'flow-edge' + (e.dashed ? ' dashed' : '');
-    svg += `<path d="${path}" class="${cls}" marker-end="url(#arrowhead)"/>`;
+    svg += `<path d="${path}" class="${cls}"/>`;
   });
 
-  // Draw nodes
-  Object.entries(nodes).forEach(([key, n]) => {
+  // Draw nodes — each wrapped in <g> for hover effect
+  nodes.forEach(n => {
+    svg += `<g class="flow-node-group" style="--node-color:${n.borderColor}">`;
     if (n.isRect) {
-      // Center node (rectangle)
-      svg += `<rect x="${n.x - 55}" y="${n.y - 30}" width="110" height="60" rx="6"
-        fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="5 3"/>`;
-      svg += `<text x="${n.x}" y="${n.y + 5}" text-anchor="middle" class="flow-node-rect">
-        <tspan class="name">${n.name}</tspan></text>`;
+      const rw = 110, rh = 50;
+      svg += `<rect x="${n.x - rw/2}" y="${n.y - rh/2}" width="${rw}" height="${rh}" rx="4"
+        fill="rgba(0,20,60,0.9)" stroke="${n.borderColor}" stroke-width="2" stroke-dasharray="5 3"/>`;
+      svg += `<text x="${n.x}" y="${n.y + 5}" text-anchor="middle" font-size="14" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
     } else {
-      // Circle node
-      svg += `<circle cx="${n.x}" cy="${n.y}" r="38" fill="none" stroke="${n.color}" stroke-width="2" opacity="0.8"/>`;
-      svg += `<text x="${n.x}" y="${n.y - 5}" text-anchor="middle" font-size="26">${n.icon}</text>`;
-      svg += `<text x="${n.x}" y="${n.y + 22}" text-anchor="middle" font-size="12" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
+      svg += `<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="rgba(0,20,60,0.9)"
+        stroke="${n.borderColor}" stroke-width="2"/>`;
+      svg += `<text x="${n.x}" y="${n.y - 4}" text-anchor="middle" font-size="24">${n.icon}</text>`;
+      svg += `<text x="${n.x}" y="${n.y + 18}" text-anchor="middle" font-size="12" fill="#fff" font-weight="bold">${n.name}</text>`;
     }
+    svg += `</g>`;
   });
 
-  // Power labels on edges
+  // Power labels — positioned below top-row nodes, above bottom-row nodes
+  // Each label is a <text> with id for dynamic update
   const labels = [
-    { x: nodes.grid.x, y: nodes.grid.y + 55, id: 'flowGridP', color: '#ff8c00' },
-    { x: nodes.pv1.x, y: nodes.pv1.y + 55, id: 'flowPv1P', color: '#ff8c00' },
-    { x: nodes.pv2.x, y: nodes.pv2.y + 55, id: 'flowPv2P', color: '#ff8c00' },
-    { x: nodes.storage.x, y: nodes.storage.y + 55, id: 'flowStorP', color: '#ff8c00' },
-    { x: nodes.dcPile.x, y: nodes.dcPile.y - 50, id: 'flowDcP', color: '#ff8c00' },
-    { x: nodes.acPile.x, y: nodes.acPile.y - 50, id: 'flowAcP', color: '#ff8c00' },
-    { x: nodes.office.x, y: nodes.office.y - 50, id: 'flowOfficeP', color: '#ff8c00' },
+    // Grid: 3 lines below node (3-phase data)
+    { id:'fGrid1', x: nodeMap.grid.x, y: topY + 55, color:'#ff8c00' },
+    { id:'fGrid2', x: nodeMap.grid.x, y: topY + 70, color:'#ff8c00' },
+    { id:'fGrid3', x: nodeMap.grid.x, y: topY + 85, color:'#ff8c00' },
+    // PV1, PV2: below
+    { id:'fPv1', x: nodeMap.pv1.x, y: topY + 58, color:'#ff9500' },
+    { id:'fPv2', x: nodeMap.pv2.x, y: topY + 58, color:'#ff9500' },
+    // Storage: below
+    { id:'fStor', x: nodeMap.storage.x, y: topY + 58, color:'#00ffff' },
+    // DC pile, AC pile, Office: above
+    { id:'fDc',     x: nodeMap.dc.x,     y: bottomY - 55, color:'#ff9500' },
+    { id:'fAc',     x: nodeMap.ac.x,     y: bottomY - 55, color:'#ff9500' },
+    { id:'fOffice', x: nodeMap.office.x, y: bottomY - 55, color:'#8899aa' },
   ];
   labels.forEach(l => {
-    svg += `<text x="${l.x}" y="${l.y}" text-anchor="middle" font-size="11" fill="${l.color}" font-weight="bold" id="${l.id}">--</text>`;
+    svg += `<text id="${l.id}" x="${l.x}" y="${l.y}" text-anchor="middle" font-size="11" fill="${l.color}" font-weight="bold">--</text>`;
   });
 
   svg += '</svg>';
   wrap.innerHTML = svg;
 }
 
-// ---- Data update ----
+// ---- Data polling & update ----
 const meterAddrs = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11];
 let allMeterData = {};
 
 function updateFlowLabels() {
-  // Grid (addr 1)
-  const gridP = getVal(allMeterData[1], 'power_total');
-  const gridV = getVal(allMeterData[1], 'voltage_a');
-  setText('flowGridP', gridV ? fmt(gridV)+'V '+fmt(getVal(allMeterData[1],'current_a'))+'A' : '--');
+  // Grid (addr 1) — 3-phase voltage/current
+  const gVa = getVal(allMeterData[1], 'voltage_a');
+  const gIa = getVal(allMeterData[1], 'current_a');
+  const gVb = getVal(allMeterData[1], 'voltage_b');
+  const gIb = getVal(allMeterData[1], 'current_b');
+  const gVc = getVal(allMeterData[1], 'voltage_c');
+  const gIc = getVal(allMeterData[1], 'current_c');
+  const gP  = getVal(allMeterData[1], 'power_total');
+  setText('fGrid1', gVa ? fmt(gP)+'V ' + fmt(gIa)+'A' : '--');
+  setText('fGrid2', gVb ? fmt(gP)+'V ' + fmt(gIb)+'A' : '--');
+  setText('fGrid3', gVc ? fmt(gP)+'V ' + fmt(gIc)+'A' : '--');
 
   // PV1 (addr 10), PV2 (addr 11)
-  const pv1P = getVal(allMeterData[10], 'power');
-  const pv2P = getVal(allMeterData[11], 'power');
   const pv1V = getVal(allMeterData[10], 'voltage');
+  const pv1I = getVal(allMeterData[10], 'current');
   const pv2V = getVal(allMeterData[11], 'voltage');
-  setText('flowPv1P', pv1V ? fmt(pv1V)+'V '+fmt(getVal(allMeterData[10],'current'))+'A' : '--');
-  setText('flowPv2P', pv2V ? fmt(pv2V)+'V '+fmt(getVal(allMeterData[11],'current'))+'A' : '--');
+  const pv2I = getVal(allMeterData[11], 'current');
+  setText('fPv1', pv1V ? fmt(pv1V,0)+'V ' + fmt(Math.abs(pv1I),0)+'A' : '--');
+  setText('fPv2', pv2V ? fmt(pv2V,0)+'V ' + fmt(Math.abs(pv2I),0)+'A' : '--');
 
-  // Storage (addr 5)
-  const storV = getVal(allMeterData[5], 'voltage');
-  const storI = getVal(allMeterData[5], 'current');
-  setText('flowStorP', storV ? fmt(storV)+'V '+fmt(storI)+'A' : '--');
+  // Storage (addr 5) — show negative values
+  const sV = getVal(allMeterData[5], 'voltage');
+  const sP = getVal(allMeterData[5], 'power');
+  const sI = getVal(allMeterData[5], 'current');
+  setText('fStor', sV ? fmt(sP)+'V ' + fmt(sI)+'A' : '--');
 
-  // DC pile (addr 8+9), AC pile (addr 3)
-  const dcP = Math.abs(getVal(allMeterData[8],'power')||0) + Math.abs(getVal(allMeterData[9],'power')||0);
-  const acP = Math.abs(getVal(allMeterData[3],'power_total')||0);
-  setText('flowDcP', dcP ? fmt(dcP)+'kW' : '--');
-  setText('flowAcP', acP ? fmt(acP)+'kW' : '--');
+  // DC piles (addr 8+9 combined power)
+  const dc8P = getVal(allMeterData[8], 'power') || 0;
+  const dc9P = getVal(allMeterData[9], 'power') || 0;
+  const dcTotal = Math.abs(dc8P) + Math.abs(dc9P);
+  setText('fDc', dcTotal ? fmt(dcTotal)+'kW' : '--');
+
+  // AC pile (addr 3)
+  const acP = getVal(allMeterData[3], 'power_total');
+  setText('fAc', acP !== null ? fmt(Math.abs(acP))+'kW' : '--');
 
   // Office (addr 4)
-  const officeP = getVal(allMeterData[4], 'power_total');
-  setText('flowOfficeP', officeP ? fmt(Math.abs(officeP))+'kW' : '--');
+  const offP = getVal(allMeterData[4], 'power_total');
+  setText('fOffice', offP !== null ? fmt(Math.abs(offP))+'kW' : '--');
 
-  // Solar hero
-  const totalSolarP = Math.abs(pv1P||0) + Math.abs(pv2P||0);
-  setText('solarPowerBig', fmt(totalSolarP));
+  // Right panel — solar hero
+  const pv1P = Math.abs(getVal(allMeterData[10], 'power') || 0);
+  const pv2P = Math.abs(getVal(allMeterData[11], 'power') || 0);
+  setText('solarPowerBig', fmt(pv1P + pv2P));
   setText('solarVoltage', pv1V ? fmt(pv1V)+'V' : '--V');
-  setText('solarCurrent', pv1P ? fmt(Math.abs(getVal(allMeterData[10],'current')||0))+'A' : '--A');
+  setText('solarCurrent', pv1I ? fmt(Math.abs(pv1I))+'A' : '--A');
 
-  // Energy cards — use energy totals from meters
+  // Energy cards
   updateEnergyCards();
 }
 
 function updateEnergyCards() {
-  // Grid energy (addr 1)
+  // Grid energy (addr 1 — ADL400)
   const gridFwd = getVal(allMeterData[1], 'energy_forward_total');
   const gridRev = getVal(allMeterData[1], 'energy_reverse_total');
   setText('gridMonthE', fmt(gridFwd, 1));
-  setText('gridYearE', fmt(gridFwd ? gridFwd * 2.6 : null, 1));
+  setText('gridYearE',  fmt(gridFwd, 1));
   setText('gridTotalE', fmt(gridFwd ? gridFwd + (gridRev||0) : null, 1));
 
-  // Load (addr 4)
+  // Load/Office (addr 4 — ADL400)
   const loadFwd = getVal(allMeterData[4], 'energy_forward_total');
-  setText('loadMonthE', fmt(loadFwd, 1));
-  setText('loadYearE', fmt(loadFwd ? loadFwd * 2.6 : null, 1));
-  setText('loadTotalE', fmt(loadFwd, 1));
+  setText('loadMonthE',   fmt(loadFwd, 1));
+  setText('loadYearE',    fmt(loadFwd, 1));
+  setText('loadTotalE',   fmt(loadFwd, 1));
+  setText('officeMonthE', fmt(loadFwd, 1));
+  setText('officeYearE',  fmt(loadFwd, 1));
+  setText('officeTotalE', fmt(loadFwd, 1));
 
-  // DC pile (addr 8+9)
-  const dc8 = getVal(allMeterData[8], 'energy_forward_total') || 0;
-  const dc9 = getVal(allMeterData[9], 'energy_forward_total') || 0;
-  const dcTotal = dc8 + dc9;
-  setText('dcMonthE', fmt(dcTotal, 1));
-  setText('dcYearE', fmt(dcTotal * 2.6, 1));
-  setText('dcTotalE', fmt(dcTotal, 1));
+  // DC pile (addr 8+9 — DJSF)
+  const dc8Fwd = getVal(allMeterData[8], 'energy_forward_total') || 0;
+  const dc9Fwd = getVal(allMeterData[9], 'energy_forward_total') || 0;
+  setText('dcMonthE', fmt(dc8Fwd + dc9Fwd, 1));
+  setText('dcYearE',  fmt(dc8Fwd + dc9Fwd, 1));
+  setText('dcTotalE', fmt(dc8Fwd + dc9Fwd, 1));
 
-  // AC pile (addr 3)
+  // AC pile (addr 3 — ADL400)
   const acFwd = getVal(allMeterData[3], 'energy_forward_total');
   setText('acMonthE', fmt(acFwd, 1));
-  setText('acYearE', fmt(acFwd ? acFwd * 2.6 : null, 1));
+  setText('acYearE',  fmt(acFwd, 1));
   setText('acTotalE', fmt(acFwd, 1));
-
-  // Office (addr 4 = user load)
-  setText('officeMonthE', fmt(loadFwd, 1));
-  setText('officeYearE', fmt(loadFwd ? loadFwd * 2.6 : null, 1));
-  setText('officeTotalE', fmt(loadFwd, 1));
 
   // PV1 (addr 10), PV2 (addr 11)
   const pv1Fwd = getVal(allMeterData[10], 'energy_forward_total');
   const pv2Fwd = getVal(allMeterData[11], 'energy_forward_total');
   setText('pv1MonthE', fmt(pv1Fwd, 1));
-  setText('pv1YearE', fmt(pv1Fwd ? pv1Fwd * 2.6 : null, 1));
+  setText('pv1YearE',  fmt(pv1Fwd, 1));
   setText('pv1TotalE', fmt(pv1Fwd, 1));
   setText('pv2MonthE', fmt(pv2Fwd, 1));
-  setText('pv2YearE', fmt(pv2Fwd ? pv2Fwd * 2.6 : null, 1));
+  setText('pv2YearE',  fmt(pv2Fwd, 1));
   setText('pv2TotalE', fmt(pv2Fwd, 1));
 
-  // Storage charge/discharge (addr 6)
+  // Battery charge/discharge (addr 6 — DJSF)
   const batFwd = getVal(allMeterData[6], 'energy_forward_total');
   const batRev = getVal(allMeterData[6], 'energy_reverse_total');
-  setText('batChargeMonth', fmt(batFwd, 1));
-  setText('batChargeYear', fmt(batFwd ? batFwd * 2.6 : null, 1));
-  setText('batChargeTotal', fmt(batFwd, 1));
+  setText('batChargeMonth',    fmt(batFwd, 1));
+  setText('batChargeYear',     fmt(batFwd, 1));
+  setText('batChargeTotal',    fmt(batFwd, 1));
   setText('batDischargeMonth', fmt(batRev, 1));
-  setText('batDischargeYear', fmt(batRev ? batRev * 2.6 : null, 1));
+  setText('batDischargeYear',  fmt(batRev, 1));
   setText('batDischargeTotal', fmt(batRev, 1));
 }
 
@@ -233,7 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(updateDashClock, 1000);
 
   renderFlowDiagram();
-  window.addEventListener('resize', renderFlowDiagram);
+  window.addEventListener('resize', () => { renderFlowDiagram(); updateFlowLabels(); });
 
   startPolling(pollAllMeters, 5000);
 });

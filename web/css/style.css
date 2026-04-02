@@ -219,10 +219,16 @@ a { color:inherit; text-decoration:none; }
 }
 .flow-canvas-wrap svg { width: 100%; height: 100%; }
 
-/* Flow edge styles */
-.flow-edge { stroke: #3b82f6; stroke-width: 4; fill: none; }
-.flow-edge.animated { stroke-dasharray: 8 4; animation: dashFlow 1s linear infinite; }
-.flow-edge.dashed { stroke-dasharray: 5 5; }
+/* Flow node hover — matches test2.vue node:hover scale(1.1) + glow */
+.flow-node-group { cursor: pointer; transition: transform 0.3s, filter 0.3s; }
+.flow-node-group:hover { transform-origin: center; filter: drop-shadow(0 0 15px var(--node-color, #00d4ff)); }
+.flow-node-group:hover circle,
+.flow-node-group:hover rect { stroke-width: 3; }
+
+/* Flow edge styles — blue dashed/animated lines matching test2.vue VueFlow */
+.flow-edge { stroke: #3b82f6; stroke-width: 4; fill: none; stroke-linecap: round; }
+.flow-edge.animated { stroke-dasharray: 8 4; animation: dashFlow 0.8s linear infinite; }
+.flow-edge.dashed { stroke-dasharray: 5 5; stroke-width: 4; }
 @keyframes dashFlow { 0%{stroke-dashoffset:0} 100%{stroke-dashoffset:-12} }
 
 /* Energy storage card — matches test2.vue .energy-storage with flex:1 */
