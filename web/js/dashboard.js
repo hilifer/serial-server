@@ -225,8 +225,18 @@ function updateFlowLabels() {
 
   // Right panel solar
   setText('solarPowerBig', fmt(Math.abs(pv1P||0)+Math.abs(pv2P||0)));
-  setText('solarVoltage', fmt(real ? getVal(allMeterData[10],'voltage') : sim.solar.voltage)+'V');
-  setText('solarCurrent', fmt(real ? Math.abs(getVal(allMeterData[10],'current')||0) : sim.solar.current)+'A');
+  // PV1 voltage/current (hero area top + sub-section)
+  const pv1VVal = real ? getVal(allMeterData[10],'voltage') : sim.solar.voltage;
+  const pv1IVal = real ? Math.abs(getVal(allMeterData[10],'current')||0) : sim.solar.current;
+  setText('pv1Voltage', fmt(pv1VVal)+'V');
+  setText('pv1Current', fmt(pv1IVal)+'A');
+  setText('pv1V2', fmt(pv1VVal)+'V');
+  setText('pv1I2', fmt(pv1IVal)+'A');
+  // PV2 voltage/current (sub-section)
+  const pv2VVal = real ? getVal(allMeterData[11],'voltage') : sim.solar.voltage;
+  const pv2IVal = real ? Math.abs(getVal(allMeterData[11],'current')||0) : sim.solar.current;
+  setText('pv2V2', fmt(pv2VVal)+'V');
+  setText('pv2I2', fmt(pv2IVal)+'A');
 
   updateEnergyCards(real, gP);
 }
