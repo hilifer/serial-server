@@ -12,7 +12,7 @@ cd /d "%~dp0"
 
 REM Pull latest code from git
 echo [1/3] Updating code from git...
-git pull
+git pull origin claude/understand-project-TBDmP
 if %ERRORLEVEL% NEQ 0 (
     echo WARNING: Git pull failed, continuing with current code...
 )
