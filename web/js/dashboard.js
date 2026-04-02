@@ -48,8 +48,7 @@ function edgeClass(baseCls, power) {
   return cls;
 }
 
-// ---- SVG Flow Diagram ----
-// Current power values for edge dynamics
+// ---- SVG Flow Diagram — strict left-right symmetric ----
 let flowPower = { grid:0, pv1:0, pv2:0, storage:0, dc:0, ac:0, office:0 };
 
 function renderFlowDiagram() {
@@ -57,78 +56,83 @@ function renderFlowDiagram() {
   if (!wrap) return;
   const W = wrap.clientWidth || 800;
   const H = wrap.clientHeight || 500;
+  const CX = W / 2; // exact center axis
 
-  // Map VueFlow coords → SVG. Source: test2.vue nodes ref
-  const cx = W * 0.48, cy = H * 0.42;
-  const sx = W / 620, sy = H / 560;
-  function mx(vx) { return cx + vx * sx; }
-  function my(vy) { return cy + vy * sy; }
+  // Symmetric spacing from center
+  const topY = H * 0.16;       // top row y
+  const midY = H * 0.46;       // center box y
+  const botY = H * 0.80;       // bottom row y
+  const d1 = W * 0.30;         // outer nodes offset (电网, 储能)
+  const d2 = W * 0.12;         // inner nodes offset (光伏1, 光伏2)
+  const d3 = W * 0.26;         // bottom outer offset (直流桩, 办公室)
+  const R = 42;                 // top node radius
+  const RB = 48;                // bottom node radius
+  const rectHW = 62, rectHH = 26; // center rect half-size
 
+  // Strictly symmetric node positions
   const N = {
-    grid:    { x:mx(-250), y:my(-200), icon:'⚡', name:'电网',      bc:'#ff6b6b', lc:'#ff8c00', r:44 },
-    pv1:     { x:mx(-80),  y:my(-200), icon:'☀️', name:'光伏1',     bc:'#ff9500', lc:'#ff9500', r:44 },
-    pv2:     { x:mx(80),   y:my(-200), icon:'☀️', name:'光伏2',     bc:'#ff9500', lc:'#ff9500', r:44 },
-    storage: { x:mx(250),  y:my(-200), icon:'🔋', name:'储能',      bc:'#00ffff', lc:'#00ffff', r:44 },
-    center:  { x:mx(0),    y:my(0),    name:'光储系统', bc:'#3b82f6', isRect:true, hw:65, hh:28 },
-    dc:      { x:mx(-200), y:my(250),  icon:'🚗', name:'直流充电桩', bc:'#ff9500', lc:'#ff9500', r:48 },
-    ac:      { x:mx(0),    y:my(250),  icon:'🚗', name:'交流充电桩', bc:'#ff9500', lc:'#ff9500', r:48 },
-    office:  { x:mx(200),  y:my(250),  icon:'💻', name:'办公室',    bc:'#4ecdc4', lc:'#8899bb', r:48 },
+    grid:    { x:CX-d1, y:topY, icon:'⚡', name:'电网',      bc:'#ff6b6b', lc:'#ff8c00', r:R },
+    pv1:     { x:CX-d2, y:topY, icon:'☀️', name:'光伏1',     bc:'#ff9500', lc:'#ff9500', r:R },
+    pv2:     { x:CX+d2, y:topY, icon:'☀️', name:'光伏2',     bc:'#ff9500', lc:'#ff9500', r:R },
+    storage: { x:CX+d1, y:topY, icon:'🔋', name:'储能',      bc:'#00ffff', lc:'#00ffff', r:R },
+    center:  { x:CX,    y:midY, name:'光储系统', bc:'#3b82f6', isRect:true },
+    dc:      { x:CX-d3, y:botY, icon:'🚗', name:'直流充电桩', bc:'#ff9500', lc:'#ff9500', r:RB },
+    ac:      { x:CX,    y:botY, icon:'🚗', name:'交流充电桩', bc:'#ff9500', lc:'#ff9500', r:RB },
+    office:  { x:CX+d3, y:botY, icon:'💻', name:'办公室',    bc:'#4ecdc4', lc:'#8899bb', r:RB },
   };
 
-  // Step path builder
-  function step(from, to, fs, ts) {
-    let x1=from.x, y1=from.y, x2=to.x, y2=to.y;
-    const r1=from.r||0, r2=to.r||0, hw=from.hw||0, hh=from.hh||0, hw2=to.hw||0, hh2=to.hh||0;
-    if (fs==='bottom') y1 += (from.isRect ? hh : r1);
-    if (fs==='right')  x1 += (from.isRect ? hw : r1);
-    if (fs==='left')   x1 -= (from.isRect ? hw : r1);
-    if (ts==='top')    y2 -= (to.isRect ? hh2 : r2);
-    if (ts==='left')   x2 -= (to.isRect ? hw2 : r2);
-    if (ts==='bottom') y2 += (to.isRect ? hh2 : r2);
-    // Orthogonal path
-    if (fs==='right' && (ts==='bottom'||ts==='left')) {
-      const midX = (x1+x2)/2;
-      return `M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2},${y2}`;
-    }
-    if (Math.abs(x1-x2) < 3) return `M${x1},${y1} L${x2},${y2}`; // straight vertical
-    const midY = (y1+y2)/2;
-    return `M${x1},${y1} L${x1},${midY} L${x2},${midY} L${x2},${y2}`;
+  // ---- Path builders (matching lizi screenshot exactly) ----
+
+  // 电网/储能: 底部垂直下到光储系统同高 → 水平转弯接光储系统左/右侧（一个直角弯）
+  function sideToCenter(node, side) {
+    const x = node.x, y1 = node.y + R;
+    const targetX = side === 'left' ? CX - rectHW : CX + rectHW;
+    return `M${x},${y1} L${x},${midY} L${targetX},${midY}`;
   }
 
-  // Edges definition (from test2.vue edges ref)
+  // 光伏1/2: 底部垂直下 → 汇合到CX竖线 → 下到光储系统顶部
+  function pvToCenter(node) {
+    const x = node.x, y1 = node.y + R, y2 = midY - rectHH;
+    // 先垂直下到汇合高度，再水平到CX，再垂直下到光储系统顶部
+    const junctY = y1 + (y2 - y1) * 0.35;
+    if (Math.abs(x - CX) < 3) return `M${x},${y1} L${x},${y2}`;
+    return `M${x},${y1} L${x},${junctY} L${CX},${junctY} L${CX},${y2}`;
+  }
+
+  // 下方节点: 光储系统底部 → 垂直下到分叉高度 → 水平到节点x → 垂直下到节点顶部
+  function centerToBot(node) {
+    const x = node.x, y1 = midY + rectHH, y2 = node.y - node.r;
+    const junctY = y1 + (y2 - y1) * 0.4;
+    if (Math.abs(x - CX) < 3) return `M${CX},${y1} L${x},${y2}`;
+    return `M${CX},${y1} L${CX},${junctY} L${x},${junctY} L${x},${y2}`;
+  }
+
   const edges = [
-    { id:'eGrid', from:'grid',   to:'center', fs:'bottom', ts:'left',   type:'grid-line' },
-    { id:'ePv1',  from:'pv1',    to:'center', fs:'bottom', ts:'top',    type:'solar' },
-    { id:'ePv2',  from:'pv2',    to:'center', fs:'bottom', ts:'top',    type:'solar' },
-    { id:'eStor', from:'center', to:'storage', fs:'right',  ts:'bottom', type:'storage' },
-    { id:'eDc',   from:'center', to:'dc',      fs:'bottom', ts:'top',    type:'charge' },
-    { id:'eAc',   from:'center', to:'ac',      fs:'bottom', ts:'top',    type:'charge' },
-    { id:'eOff',  from:'center', to:'office',  fs:'bottom', ts:'top',    type:'office-line' },
+    { id:'eGrid', path: sideToCenter(N.grid, 'left'),    type:'grid-line', pk:'grid' },
+    { id:'ePv1',  path: pvToCenter(N.pv1),                type:'solar',     pk:'pv1' },
+    { id:'ePv2',  path: pvToCenter(N.pv2),                type:'solar',     pk:'pv2' },
+    { id:'eStor', path: sideToCenter(N.storage, 'right'), type:'storage',   pk:'storage' },
+    { id:'eDc',   path: centerToBot(N.dc),                type:'charge',    pk:'dc' },
+    { id:'eAc',   path: centerToBot(N.ac),                type:'charge',    pk:'ac' },
+    { id:'eOff',  path: centerToBot(N.office),            type:'office-line',pk:'office' },
   ];
 
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`;
 
-  // Edges
+  // Draw edges
   edges.forEach(e => {
-    const d = step(N[e.from], N[e.to], e.fs, e.ts);
-    // Dynamic class: grid is always dashed; others animated with type color
-    let cls;
-    if (e.id === 'eGrid') cls = edgeClass('flow-edge dashed grid-line', flowPower.grid);
-    else if (e.id === 'ePv1') cls = edgeClass('flow-edge solar', flowPower.pv1);
-    else if (e.id === 'ePv2') cls = edgeClass('flow-edge solar', flowPower.pv2);
-    else if (e.id === 'eStor') cls = edgeClass('flow-edge storage', flowPower.storage);
-    else if (e.id === 'eDc') cls = edgeClass('flow-edge charge', flowPower.dc);
-    else if (e.id === 'eAc') cls = edgeClass('flow-edge charge', flowPower.ac);
-    else if (e.id === 'eOff') cls = edgeClass('flow-edge office-line', flowPower.office);
-    else cls = 'flow-edge animated';
-    svg += `<path id="${e.id}" d="${d}" class="${cls}"/>`;
+    const isDashed = e.id === 'eGrid';
+    const cls = isDashed
+      ? edgeClass('flow-edge dashed ' + e.type, flowPower[e.pk])
+      : edgeClass('flow-edge ' + e.type, flowPower[e.pk]);
+    svg += `<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
   });
 
-  // Nodes
+  // Draw nodes
   Object.entries(N).forEach(([k, n]) => {
     svg += `<g class="flow-node-group" style="--node-color:${n.bc}">`;
     if (n.isRect) {
-      svg += `<rect x="${n.x-n.hw}" y="${n.y-n.hh}" width="${n.hw*2}" height="${n.hh*2}" rx="5"
+      svg += `<rect x="${n.x-rectHW}" y="${n.y-rectHH}" width="${rectHW*2}" height="${rectHH*2}" rx="5"
         fill="rgba(0,20,60,0.9)" stroke="${n.bc}" stroke-width="2" stroke-dasharray="5 3"/>`;
       svg += `<text x="${n.x}" y="${n.y+5}" text-anchor="middle" font-size="14" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
     } else {
@@ -139,20 +143,17 @@ function renderFlowDiagram() {
     svg += `</g>`;
   });
 
-  // Power labels — top row BELOW nodes, bottom row ABOVE nodes
-  const gap = 16;
-  // Grid: 3 lines
-  svg += `<text id="fG1" x="${N.grid.x}" y="${N.grid.y+N.grid.r+gap}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fG2" x="${N.grid.x}" y="${N.grid.y+N.grid.r+gap+14}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fG3" x="${N.grid.x}" y="${N.grid.y+N.grid.r+gap+28}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  // PV1, PV2, Storage: 1 line below
-  svg += `<text id="fPv1" x="${N.pv1.x}" y="${N.pv1.y+N.pv1.r+gap}" text-anchor="middle" font-size="11" fill="${N.pv1.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fPv2" x="${N.pv2.x}" y="${N.pv2.y+N.pv2.r+gap}" text-anchor="middle" font-size="11" fill="${N.pv2.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fStor" x="${N.storage.x}" y="${N.storage.y+N.storage.r+gap}" text-anchor="middle" font-size="11" fill="${N.storage.lc}" font-weight="bold"></text>`;
-  // Bottom row: ABOVE nodes
-  svg += `<text id="fDc" x="${N.dc.x}" y="${N.dc.y-N.dc.r-10}" text-anchor="middle" font-size="12" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fAc" x="${N.ac.x}" y="${N.ac.y-N.ac.r-10}" text-anchor="middle" font-size="12" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg += `<text id="fOff" x="${N.office.x}" y="${N.office.y-N.office.r-10}" text-anchor="middle" font-size="12" fill="${N.office.lc}" font-weight="bold"></text>`;
+  // Power labels
+  const lg = 16;
+  svg += `<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+14}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+28}" text-anchor="middle" font-size="11" fill="${N.grid.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fPv1" x="${N.pv1.x}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="11" fill="${N.pv1.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fPv2" x="${N.pv2.x}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="11" fill="${N.pv2.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="11" fill="${N.storage.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-10}" text-anchor="middle" font-size="12" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-10}" text-anchor="middle" font-size="12" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg += `<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-10}" text-anchor="middle" font-size="12" fill="${N.office.lc}" font-weight="bold"></text>`;
 
   svg += '</svg>';
   wrap.innerHTML = svg;
