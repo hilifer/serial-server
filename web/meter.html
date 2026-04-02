@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>电表详情</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+body { background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0f3460 100%); }
+.detail-page { width:100vw; height:100vh; display:flex; flex-direction:column; font-family:'Microsoft YaHei',sans-serif; color:#fff; }
+
+.detail-header {
+  height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 30px;
+  background:linear-gradient(90deg, rgba(0,150,255,0.1), rgba(0,200,255,0.2), rgba(0,150,255,0.1));
+  border-bottom:2px solid rgba(0,200,255,0.3);
+}
+.detail-header .back { font-size:16px; color:#00d4ff; cursor:pointer; text-decoration:none; }
+.detail-header .title { font-size:22px; font-weight:bold; color:#00d4ff; }
+.detail-header .time { font-size:14px; color:rgba(255,255,255,0.7); }
+
+.detail-body { flex:1; display:flex; gap:20px; padding:20px; min-height:0; }
+
+/* Left: big gauge area */
+.gauge-panel {
+  flex:1; background:rgba(0,20,60,0.8); border:1px solid rgba(0,200,255,0.3);
+  border-radius:15px; padding:30px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+}
+.gauge-icon { font-size:80px; margin-bottom:20px; }
+.gauge-power { font-size:64px; font-weight:bold; color:#00d4ff; }
+.gauge-unit { font-size:20px; color:rgba(255,255,255,0.6); margin-left:8px; }
+.gauge-status { margin-top:15px; padding:6px 20px; border-radius:20px; font-size:14px; font-weight:bold; }
+.gauge-status.online { background:rgba(0,255,136,0.2); color:#00ff88; border:1px solid rgba(0,255,136,0.4); }
+.gauge-status.offline { background:rgba(255,100,100,0.2); color:#ff6b6b; border:1px solid rgba(255,100,100,0.4); }
+
+/* Right: data cards */
+.data-panel { flex:1.2; display:flex; flex-direction:column; gap:15px; overflow-y:auto; }
+.data-card {
+  background:rgba(0,20,60,0.8); border:1px solid rgba(0,200,255,0.3);
+  border-radius:12px; padding:18px; position:relative; overflow:hidden;
+}
+.data-card::before {
+  content:''; position:absolute; top:0; left:-100%; width:100%; height:2px;
+  background:linear-gradient(90deg, transparent, #00d4ff, transparent);
+  animation: scanLine 3s linear infinite;
+}
+@keyframes scanLine { 0%{left:-100%} 100%{left:100%} }
+.data-card h3 { font-size:15px; color:#00d4ff; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid rgba(0,200,255,0.2); }
+.data-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.data-grid.three-col { grid-template-columns:1fr 1fr 1fr; }
+.data-item {
+  padding:10px; background:rgba(0,50,100,0.3); border:1px solid rgba(0,200,255,0.15);
+  border-radius:8px; text-align:center;
+}
+.data-item .label { font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:4px; }
+.data-item .value { font-size:18px; font-weight:bold; color:#fff; }
+.data-item .unit { font-size:11px; color:rgba(255,255,255,0.5); }
+.data-item.highlight .value { color:#00d4ff; }
+.data-item.warn .value { color:#ff6b6b; }
+
+/* Refresh indicator */
+.refresh-dot { width:8px; height:8px; border-radius:50%; background:#00ff88; display:inline-block; margin-right:6px; animation: blink 1s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+</style>
+</head>
+<body>
+<div class="detail-page">
+  <div class="detail-header">
+    <a href="/detail.html" class="back">◀ 返回监控</a>
+    <div class="title" id="meterTitle">电表详情</div>
+    <div class="time"><span class="refresh-dot"></span><span id="detailTime">--</span></div>
+  </div>
+  <div class="detail-body">
+    <!-- Left: Gauge -->
+    <div class="gauge-panel">
+      <div class="gauge-icon" id="meterIcon">☀️</div>
+      <div>
+        <span class="gauge-power" id="mainPower">--</span>
+        <span class="gauge-unit">kW</span>
+      </div>
+      <div class="gauge-status online" id="meterStatus">在线</div>
+    </div>
+    <!-- Right: Data cards -->
+    <div class="data-panel" id="dataPanel">
+      <!-- Dynamically populated -->
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+// Parse ?addr=10 from URL
+const params = new URLSearchParams(location.search);
+const addr = parseInt(params.get('addr')) || 10;
+
+// Meter info
+const METER_INFO = {
+  1:  { name:'电网侧电表',   icon:'⚡', model:'ADL400', type:'AC' },
+  2:  { name:'逆变侧电表',   icon:'🔄', model:'ADL400', type:'AC' },
+  3:  { name:'交流桩电表',   icon:'🚗', model:'ADL400', type:'AC' },
+  4:  { name:'用户负载电表', icon:'🏢', model:'ADL400', type:'AC' },
+  5:  { name:'整流侧电表',   icon:'🔋', model:'DJSF1352-RN-6', type:'DC' },
+  6:  { name:'电池柜电表',   icon:'🔋', model:'DJSF1352-RN', type:'DC' },
+  8:  { name:'直流充电桩1',  icon:'🚗', model:'DJSF1352-RN', type:'DC' },
+  9:  { name:'直流充电桩2',  icon:'🚗', model:'DJSF1352-RN', type:'DC' },
+  10: { name:'光伏1',        icon:'☀️', model:'DJSF1352-RN', type:'DC' },
+  11: { name:'光伏2',        icon:'☀️', model:'DJSF1352-RN', type:'DC' },
+};
+const info = METER_INFO[addr] || { name:'电表'+addr, icon:'📊', model:'未知', type:'DC' };
+
+document.getElementById('meterTitle').textContent = info.name + ' — ' + info.model;
+document.getElementById('meterIcon').textContent = info.icon;
+
+function fmt(v, d) { return (v===null||v===undefined) ? '--' : Number(v).toFixed(d===undefined?1:d); }
+
+function renderData(data) {
+  const panel = document.getElementById('dataPanel');
+  const statusEl = document.getElementById('meterStatus');
+  const powerEl = document.getElementById('mainPower');
+
+  if (!data || !data.data) {
+    statusEl.className = 'gauge-status offline';
+    statusEl.textContent = '离线';
+    powerEl.textContent = '--';
+    panel.innerHTML = '<div class="data-card"><h3>无数据</h3><p style="color:rgba(255,255,255,0.5)">设备未响应，等待重试...</p></div>';
+    return;
+  }
+
+  statusEl.className = 'gauge-status online';
+  statusEl.textContent = '在线';
+
+  const d = data.data;
+  const getV = (k) => d[k] ? d[k].value : null;
+
+  if (info.type === 'AC') {
+    // ADL400 — 3-phase AC meter
+    powerEl.textContent = fmt(getV('power_total'));
+
+    panel.innerHTML = `
+      <div class="data-card"><h3>电压</h3>
+        <div class="data-grid three-col">
+          <div class="data-item highlight"><div class="label">A相电压</div><div class="value">${fmt(getV('voltage_a'))}<span class="unit"> V</span></div></div>
+          <div class="data-item highlight"><div class="label">B相电压</div><div class="value">${fmt(getV('voltage_b'))}<span class="unit"> V</span></div></div>
+          <div class="data-item highlight"><div class="label">C相电压</div><div class="value">${fmt(getV('voltage_c'))}<span class="unit"> V</span></div></div>
+        </div>
+      </div>
+      <div class="data-card"><h3>电流</h3>
+        <div class="data-grid three-col">
+          <div class="data-item"><div class="label">A相电流</div><div class="value">${fmt(getV('current_a'))}<span class="unit"> A</span></div></div>
+          <div class="data-item"><div class="label">B相电流</div><div class="value">${fmt(getV('current_b'))}<span class="unit"> A</span></div></div>
+          <div class="data-item"><div class="label">C相电流</div><div class="value">${fmt(getV('current_c'))}<span class="unit"> A</span></div></div>
+        </div>
+      </div>
+      <div class="data-card"><h3>功率</h3>
+        <div class="data-grid">
+          <div class="data-item highlight"><div class="label">总有功功率</div><div class="value">${fmt(getV('power_total'))}<span class="unit"> kW</span></div></div>
+          <div class="data-item"><div class="label">总无功功率</div><div class="value">${fmt(getV('reactive_power_total'))}<span class="unit"> kvar</span></div></div>
+          <div class="data-item"><div class="label">功率因数</div><div class="value">${fmt(getV('power_factor'),3)}</div></div>
+          <div class="data-item"><div class="label">频率</div><div class="value">${fmt(getV('frequency'))}<span class="unit"> Hz</span></div></div>
+        </div>
+      </div>
+      <div class="data-card"><h3>电能</h3>
+        <div class="data-grid">
+          <div class="data-item highlight"><div class="label">正向总电能</div><div class="value">${fmt(getV('energy_forward_total'))}<span class="unit"> kWh</span></div></div>
+          <div class="data-item"><div class="label">反向总电能</div><div class="value">${fmt(getV('energy_reverse_total'))}<span class="unit"> kWh</span></div></div>
+          <div class="data-item"><div class="label">组合总电能</div><div class="value">${fmt(getV('energy_combined_total'))}<span class="unit"> kWh</span></div></div>
+        </div>
+      </div>`;
+  } else {
+    // DJSF — DC meter
+    powerEl.textContent = fmt(getV('power'));
+
+    panel.innerHTML = `
+      <div class="data-card"><h3>实时参数</h3>
+        <div class="data-grid">
+          <div class="data-item highlight"><div class="label">电压</div><div class="value">${fmt(getV('voltage'))}<span class="unit"> V</span></div></div>
+          <div class="data-item highlight"><div class="label">电流</div><div class="value">${fmt(getV('current'))}<span class="unit"> A</span></div></div>
+          <div class="data-item highlight"><div class="label">功率</div><div class="value">${fmt(getV('power'))}<span class="unit"> kW</span></div></div>
+          <div class="data-item"><div class="label">温度</div><div class="value">${fmt(getV('temperature'))}<span class="unit"> °C</span></div></div>
+        </div>
+      </div>
+      <div class="data-card"><h3>电能累计</h3>
+        <div class="data-grid">
+          <div class="data-item highlight"><div class="label">正向总电能</div><div class="value">${fmt(getV('energy_forward_total'))}<span class="unit"> kWh</span></div></div>
+          <div class="data-item"><div class="label">反向总电能</div><div class="value">${fmt(getV('energy_reverse_total'))}<span class="unit"> kWh</span></div></div>
+        </div>
+      </div>
+      <div class="data-card"><h3>设备信息</h3>
+        <div class="data-grid">
+          <div class="data-item"><div class="label">型号</div><div class="value" style="font-size:14px">${info.model}</div></div>
+          <div class="data-item"><div class="label">Modbus地址</div><div class="value">${addr}</div></div>
+        </div>
+      </div>`;
+  }
+}
+
+// Clock
+function updateClock() {
+  document.getElementById('detailTime').textContent = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+}
+
+// Poll
+async function poll() {
+  const data = await getMeterRealtime(addr);
+  renderData(data);
+}
+
+updateClock();
+setInterval(updateClock, 1000);
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

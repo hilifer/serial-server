@@ -130,7 +130,10 @@ function renderFlowDiagram() {
 
   // Draw nodes
   Object.entries(N).forEach(([k, n]) => {
-    svg += `<g class="flow-node-group" style="--node-color:${n.bc}">`;
+    // Click-through: nodes with addr navigate to meter detail
+    const clickAddr = { pv1:10, pv2:11, grid:1, storage:5, dc:8, ac:3, office:4 }[k];
+    const clickAttr = clickAddr ? ` data-addr="${clickAddr}" style="cursor:pointer"` : '';
+    svg += `<g class="flow-node-group"${clickAttr} style="--node-color:${n.bc}${clickAddr?';cursor:pointer':''}">`;
     if (n.isRect) {
       svg += `<rect x="${n.x-rectHW}" y="${n.y-rectHH}" width="${rectHW*2}" height="${rectHH*2}" rx="8"
         fill="rgba(0,20,60,0.9)" stroke="${n.bc}" stroke-width="2" stroke-dasharray="6 4"/>`;
@@ -157,6 +160,14 @@ function renderFlowDiagram() {
 
   svg += '</svg>';
   wrap.innerHTML = svg;
+
+  // Bind click handlers — nodes with data-addr navigate to meter detail
+  wrap.querySelectorAll('[data-addr]').forEach(g => {
+    g.addEventListener('click', () => {
+      const a = g.getAttribute('data-addr');
+      if (a) location.href = '/meter.html?addr=' + a;
+    });
+  });
 }
 
 // ---- Update edge animation dynamically (without re-rendering SVG) ----
