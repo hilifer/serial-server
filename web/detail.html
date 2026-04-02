@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>耀嵘 — 光储充智慧能源管理平台</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="energy-bigscreen">
+  <!-- Background -->
+  <div class="bg-particles"></div>
+  <div class="bg-grid"></div>
+
+  <!-- Header -->
+  <div class="dash-header">
+    <div class="dash-logo">
+      <div class="dash-logo-icon">⚡</div>
+      <div>
+        <div class="dash-title">耀嵘光储充智慧能源管理平台</div>
+        <div class="dash-subtitle">Smart Energy Management Platform</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:20px">
+      <div class="dash-time">
+        <div class="dash-time-value" id="dashClock"></div>
+        <div class="dash-time-date" id="dashDate"></div>
+      </div>
+      <a href="/" class="back-link">◀ 返回地图</a>
+    </div>
+  </div>
+
+  <!-- Main 3-column -->
+  <div class="dash-main">
+    <!-- Left: Storage + Solar -->
+    <div class="dash-col">
+      <!-- Storage card -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          <span class="card-title">储能系统</span>
+          <div class="status-dot online"></div>
+        </div>
+        <div class="soc-container">
+          <div class="soc-circle">
+            <svg class="soc-svg" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(0,255,255,0.2)" stroke-width="8"/>
+              <circle id="socArc" cx="60" cy="60" r="54" fill="none" stroke="#00ffff" stroke-width="8"
+                      stroke-dasharray="339.292" stroke-dashoffset="67.86"
+                      transform="rotate(-90 60 60)"/>
+            </svg>
+            <div class="soc-text">
+              <span class="soc-value" id="socValue">--%</span>
+              <span class="soc-label">SOC</span>
+            </div>
+          </div>
+        </div>
+        <div class="power-grid">
+          <div class="power-item"><span class="lbl">电压</span><span class="val" id="storV">--V</span></div>
+          <div class="power-item"><span class="lbl">电流</span><span class="val" id="storI">--A</span></div>
+          <div class="power-item"><span class="lbl">功率</span><span class="val" id="storP">--kW</span></div>
+        </div>
+      </div>
+
+      <!-- Solar card -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          <span class="card-title">光伏发电</span>
+          <div class="status-dot online"></div>
+        </div>
+        <div class="solar-icon">☀️</div>
+        <div class="solar-big"><span id="solarP">--</span><span class="solar-unit"> kW</span></div>
+        <div class="power-grid">
+          <div class="power-item"><span class="lbl">电压</span><span class="val" id="solarV">--V</span></div>
+          <div class="power-item"><span class="lbl">电流</span><span class="val" id="solarI">--A</span></div>
+          <div class="power-item"><span class="lbl">温度</span><span class="val" id="solarT">--°C</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Flow diagram + Charging map -->
+    <div class="dash-col">
+      <!-- Realtime monitor -->
+      <div class="panel-card" style="flex:1.2">
+        <div class="card-hdr">
+          <span class="card-title">实时电力监控</span>
+          <div class="live-tag"><span class="live-dot"></span>LIVE</div>
+        </div>
+        <div class="flow-diagram">
+          <div class="flow-row">
+            <div class="flow-node" id="nodeGrid">
+              <div class="node-icon">🔌</div>
+              <div class="node-name">电网</div>
+              <div class="node-val" id="gridV">--V</div>
+              <div class="node-val" id="gridI">--A</div>
+              <div class="node-val" id="gridP">--kW</div>
+            </div>
+            <div class="flow-arrow">➡️</div>
+            <div class="flow-node" id="nodeStorage">
+              <div class="node-icon">🔋</div>
+              <div class="node-name">储能</div>
+              <div class="node-val" id="storV2">--V</div>
+              <div class="node-val" id="storI2">--A</div>
+            </div>
+            <div class="flow-arrow">⬅️➡️</div>
+            <div class="flow-node" id="nodeSolar">
+              <div class="node-icon">☀️</div>
+              <div class="node-name">光伏</div>
+              <div class="node-val" id="solarV2">--V</div>
+              <div class="node-val" id="solarI2">--A</div>
+            </div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-arrow down">⬇️</div>
+          </div>
+          <div class="flow-row">
+            <div class="flow-node" id="nodeCharge">
+              <div class="node-icon">🚗</div>
+              <div class="node-name">充电桩</div>
+              <div class="node-val" id="chargeV">--V</div>
+              <div class="node-val" id="chargeI">--A</div>
+              <div class="node-val" id="chargeP">--kW</div>
+            </div>
+            <div style="flex:1"></div>
+            <div class="flow-node" id="nodeLoad">
+              <div class="node-icon">🏢</div>
+              <div class="node-name">用户负载</div>
+              <div class="node-val" id="loadV">--V</div>
+              <div class="node-val" id="loadI">--A</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charging pile map -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          <span class="card-title">充电桩分布</span>
+          <div style="font-size:13px">
+            <span style="color:#00ff88">空闲: <b id="mapFree">-</b></span>
+            <span style="color:#ff6b6b;margin-left:10px">占用: <b id="mapBusy">-</b></span>
+          </div>
+        </div>
+        <div class="pile-grid" id="pileGrid"></div>
+      </div>
+    </div>
+
+    <!-- Right: System status -->
+    <div class="dash-col">
+      <!-- Meter overview -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          <span class="card-title">电表概览</span>
+          <div class="status-dot online"></div>
+        </div>
+        <div id="meterList" class="status-list"></div>
+      </div>
+
+      <!-- System status -->
+      <div class="panel-card">
+        <div class="card-hdr">
+          <span class="card-title">系统状态</span>
+          <div style="color:#00ff88;font-size:13px;font-weight:bold">正常</div>
+        </div>
+        <div id="sysStatus" class="status-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="dash-footer">
+    <div><span class="fl">今日发电量:</span><span class="fv" id="todayGen">--</span><span class="fl"> kWh</span></div>
+    <div class="alert" id="alertMsg"></div>
+    <div><span class="fl">数据更新:</span><span class="fv" id="updateTime">--</span></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/dashboard.js"></script>
+</body>
+</html>

@@ -16,6 +16,7 @@ Endpoints:
 """
 
 import logging
+import requests as http_requests
 
 from flask import Flask, jsonify, request, abort
 
@@ -40,13 +41,31 @@ from parking import (
     STATUS_NAMES, DISPLAY_MODE_NAMES, COLOR_NAMES,
 )
 
+import os
+
 logger = logging.getLogger("meter-api")
 
 # ---------------------------------------------------------------------------
-# Flask application
+# Flask application — serve API + static web files
 # ---------------------------------------------------------------------------
 
-app = Flask(__name__)
+web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+app = Flask(__name__, static_folder=web_dir, static_url_path="")
+
+
+@app.route("/")
+def serve_index():
+    return app.send_static_file("index.html")
+
+
+@app.route("/<path:path>")
+def serve_static(path):
+    """Serve static files, fall back to index.html for SPA routing."""
+    file_path = os.path.join(web_dir, path)
+    if os.path.isfile(file_path):
+        return app.send_static_file(path)
+    # API routes handled by Flask, not here
+    abort(404)
 
 
 def get_serial():
@@ -351,8 +370,97 @@ def get_yearly(addr: int):
 
 
 # ===========================================================================
-# Parking API Endpoints (custom RS485 protocol, NOT Modbus)
+# Charging Pile/Gun API — Odoo proxy
 # ===========================================================================
+
+ODOO_URL = "http://yaorongiot.cn:8069"
+ODOO_DB = "odoo12-yaorong"
+ODOO_USER = "2355279188@qq.com"
+ODOO_PASS = "123456"
+_odoo_session = {"id": None}
+
+
+def _odoo_login():
+    """Authenticate with Odoo and get session_id."""
+    try:
+        resp = http_requests.post(
+            f"{ODOO_URL}/web/session/authenticate",
+            json={"jsonrpc": "2.0", "params": {
+                "db": ODOO_DB, "login": ODOO_USER, "password": ODOO_PASS
+            }},
+            timeout=10,
+        )
+        sid = resp.cookies.get("session_id")
+        if sid:
+            _odoo_session["id"] = sid
+            return sid
+    except Exception as e:
+        logger.warning("Odoo login failed: %s", e)
+    return None
+
+
+def _odoo_call(model, method, domain, fields=None):
+    """Call Odoo JSON-RPC API."""
+    sid = _odoo_session["id"] or _odoo_login()
+    if not sid:
+        return None
+
+    payload = {
+        "jsonrpc": "2.0", "method": "call",
+        "params": {
+            "model": model, "method": method,
+            "args": [domain],
+            "kwargs": {"fields": fields} if fields else {},
+        },
+    }
+
+    for attempt in range(2):
+        try:
+            resp = http_requests.post(
+                f"{ODOO_URL}/web/dataset/call_kw",
+                json=payload,
+                headers={"Cookie": f"session_id={sid}"},
+                timeout=15,
+            )
+            data = resp.json()
+            if "error" in data and attempt == 0:
+                sid = _odoo_login()
+                continue
+            return data
+        except Exception as e:
+            logger.warning("Odoo call failed: %s", e)
+            if attempt == 0:
+                sid = _odoo_login()
+    return None
+
+
+@app.get("/charging/piles")
+def get_charging_piles():
+    """Proxy to Odoo: list charging piles."""
+    data = _odoo_call(
+        "pile.charge_server", "search_read",
+        [["station_id", "=", 3]],
+        ["id", "name", "pile_code", "pile_type", "gun_count", "status",
+         "gun_ids", "description"],
+    )
+    if data:
+        return jsonify(data)
+    return jsonify({"result": []})
+
+
+@app.get("/charging/guns")
+def get_charging_guns():
+    """Proxy to Odoo: list charging guns with status."""
+    data = _odoo_call(
+        "gun.charge_server", "search_read",
+        [["station_id", "=", 3]],
+        ["id", "gun_code", "gun_number", "gun_type", "status", "pile_id",
+         "output_voltage", "output_current", "total_charge_time",
+         "charge_degree"],
+    )
+    if data:
+        return jsonify(data)
+    return jsonify({"result": []})
 
 def get_parking_serial(com_port: str):
     from state import serial_managers
