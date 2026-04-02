@@ -8,14 +8,13 @@
 </head>
 <body>
 <div class="app" id="app">
-  <!-- Header -->
+  <!-- Header (matches D2Viewer.vue) -->
   <header class="header">
     <div class="header-left">
       <img src="/images/logo2.png" class="logo-img" alt="logo">
       <span class="system-name">耀嵘—光储充管理系统</span>
     </div>
     <div class="header-right">
-      <span class="clock" id="clock"></span>
       <a href="/detail.html" class="nav-btn" title="能源看板">&#9881;</a>
     </div>
   </header>
@@ -24,26 +23,25 @@
   <div class="map-container" id="mapContainer">
     <img src="/images/base.jpg" class="base-map" alt="停车场">
 
-    <!-- Cars (dynamically inserted) -->
+    <!-- Per-position car overlay images (dynamically inserted) -->
+    <div id="carOverlayLayer"></div>
+
+    <!-- Cars clickable layer (dynamically inserted) -->
     <div id="carsLayer"></div>
 
     <!-- Charging piles (dynamically inserted) -->
     <div id="pilesLayer"></div>
   </div>
 
-  <!-- Footer stats -->
+  <!-- Footer (matches D2Viewer.vue 3D perspective footer) -->
   <div class="footer" id="footer">
     <div class="footer-section">
-      <span class="label-yellow">充电桩</span>
-      <span class="val-green">空闲 <b id="pilesFree">-</b> 个</span>
-      <span class="label-yellow">状 态:</span>
-      <span class="val-red">占用 <b id="pilesBusy">-</b> 个</span>
+      <div>充电桩：<span class="val-green">空闲<b id="pilesFree">-</b>个</span></div>
+      <div>状态：<span class="val-red">占用<b id="pilesBusy">-</b>个</span></div>
     </div>
     <div class="footer-section">
-      <span class="label-yellow">车 位</span>
-      <span class="val-green">空闲 <b id="parkFree">-</b> 个</span>
-      <span class="label-yellow">状 态:</span>
-      <span class="val-red">占用 <b id="parkOccupied">-</b> 个</span>
+      <div>车位：<span class="val-green">空闲<b id="parkFree">-</b>个</span></div>
+      <div>状态：<span class="val-red">占用<b id="parkOccupied">-</b>个</span></div>
     </div>
   </div>
 

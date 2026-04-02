@@ -1,6 +1,6 @@
 /**
  * Parking map — renders cars and charging piles on base map.
- * Positions extracted from lizi/public/images/car/*.png using Pillow.
+ * Matches D2Viewer.vue display logic from lizi project.
  */
 
 // 54 car center positions (left%, top%) — pixel-accurate from PNG extraction
@@ -56,9 +56,28 @@ function getPileType(index) {
 let parkingData = {};   // {space_id: {status, label}}
 let gunData = {};       // {gun_id: gun_object}
 let pileData = {};      // {pile_id: pile_object}
-let activePopup = null;
 
-// ---- Render cars ----
+// ---- Render per-position car overlay images (matches D2Viewer.vue car/N.png) ----
+function renderCarOverlays() {
+  const layer = document.getElementById('carOverlayLayer');
+  if (!layer) return;
+  layer.innerHTML = '';
+
+  for (let i = 1; i <= 54; i++) {
+    const space = parkingData[i];
+    const occupied = space && space.status === 1;
+
+    const img = document.createElement('img');
+    img.src = '/images/car/' + i + '.png';
+    img.className = 'car-overlay-img';
+    img.loading = 'lazy';
+    img.style.display = occupied ? 'block' : 'none';
+    img.dataset.spaceId = i;
+    layer.appendChild(img);
+  }
+}
+
+// ---- Render clickable car layer (matches D2Viewer.vue UPopover triggers) ----
 function renderCars() {
   const layer = document.getElementById('carsLayer');
   if (!layer) return;
@@ -78,6 +97,7 @@ function renderCars() {
     img.src = '/images/car.png';
     img.alt = pos.id + '号车位';
     img.loading = 'lazy';
+    img.style.opacity = occupied ? '1' : '0';
     div.appendChild(img);
 
     div.addEventListener('click', (e) => showCarPopup(e, pos.id, space));
@@ -85,7 +105,7 @@ function renderCars() {
   });
 }
 
-// ---- Render charging piles ----
+// ---- Render charging piles (matches D2Viewer.vue .map-pile with UPageCard) ----
 function renderPiles() {
   const layer = document.getElementById('pilesLayer');
   if (!layer) return;
@@ -94,27 +114,24 @@ function renderPiles() {
   PILE_POSITIONS.forEach((pos, idx) => {
     const pileType = getPileType(idx);
     const isFree = isPileFree(pos.id);
+    const statusClass = isFree ? 'free' : 'busy';
 
     const div = document.createElement('div');
-    div.className = 'pile-label';
+    div.className = 'pile-label ' + statusClass;
     div.style.left = pos.left + '%';
     div.style.top = pos.top + '%';
 
     const bubble = document.createElement('div');
-    bubble.className = 'pile-bubble ' + (isFree ? 'free' : 'busy');
+    bubble.className = 'pile-bubble ' + statusClass;
 
     const title = document.createElement('div');
     title.className = 'pile-title';
     title.textContent = pos.id + '号';
 
-    const info = document.createElement('div');
-    info.className = 'pile-info-line';
-    info.textContent = pileType.power + ' ' + pileType.type + '充电桩';
+    bubble.appendChild(title);
 
     // Add gun status lines
     const gunLines = getGunLinesForPile(pos.id);
-    bubble.appendChild(title);
-    bubble.appendChild(info);
     gunLines.forEach(line => {
       const d = document.createElement('div');
       d.className = 'pile-info-line';
@@ -122,31 +139,64 @@ function renderPiles() {
       bubble.appendChild(d);
     });
 
+    // Default info if no gun data
+    if (gunLines.length === 0) {
+      const info = document.createElement('div');
+      info.className = 'pile-info-line';
+      info.textContent = pileType.type + '：' + pileType.power;
+      bubble.appendChild(info);
+    }
+
     div.appendChild(bubble);
-    div.addEventListener('click', (e) => showPilePopup(e, pos.id));
     layer.appendChild(div);
   });
 }
 
+// Odoo pile ID -> display index mapping (populated from API)
+let pileIdToIndex = {};
+
 function isPileFree(pileIndex) {
-  // Check if any gun of this pile has status '02' (idle)
   const guns = Object.values(gunData);
+  let hasGun = false;
   for (const gun of guns) {
-    if (gun.pile_id && gun.pile_id[0] && matchPileIndex(gun.pile_id[0], pileIndex)) {
-      if (gun.status === '02') return true;
+    if (gun.pile_id && gun.pile_id[0]) {
+      const idx = pileIdToIndex[gun.pile_id[0]];
+      if (idx === pileIndex) {
+        hasGun = true;
+        if (gun.status === '02') return true;
+      }
     }
   }
-  return guns.length === 0; // Default free if no gun data
-}
-
-function matchPileIndex(pileId, index) {
-  // Map Odoo pile IDs to display indices (simplified)
-  return true; // Will be refined when Odoo data is available
+  return !hasGun; // Default free if no gun matched
 }
 
 function getGunLinesForPile(pileIndex) {
-  // Return status lines for guns belonging to this pile
-  return [];
+  const lines = [];
+  const guns = Object.values(gunData);
+  const statusMap = {'02':'空闲','00':'离线','01':'故障','03':'充电'};
+  for (const gun of guns) {
+    if (gun.pile_id && gun.pile_id[0]) {
+      const idx = pileIdToIndex[gun.pile_id[0]];
+      if (idx === pileIndex) {
+        const gunNum = gun.gun_number || '?';
+        const statusText = statusMap[gun.status] || '未知';
+        lines.push(gunNum + '枪 ' + statusText);
+        // Determine type from pile data
+        const pile = pileData[gun.pile_id[0]];
+        if (pile) {
+          const pType = pile.pile_type === '00' ? '直流' : '交流';
+          const pPower = pile.pile_type === '00' ? '120kW' : '7kW';
+          lines.push(pType + '：' + pPower);
+        }
+        // Charging details
+        if (gun.status === '03') {
+          if (gun.total_charge_time) lines.push(gun.total_charge_time + '分钟');
+          if (gun.charge_degree) lines.push(gun.charge_degree + '度');
+        }
+      }
+    }
+  }
+  return lines;
 }
 
 // ---- Popup for car ----
@@ -165,22 +215,6 @@ function showCarPopup(event, spaceId, space) {
       <span class="lbl">车位状态：</span>
       <span class="status-tag ${statusClass}">${statusText}</span>
     </div>
-  `;
-
-  popup.style.display = 'block';
-  positionPopup(popup, event);
-}
-
-function showPilePopup(event, pileId) {
-  hidePopup();
-  const popup = document.getElementById('popup');
-  const content = document.getElementById('popupContent');
-  const pt = getPileType(pileId - 1);
-
-  content.innerHTML = `
-    <span class="close-btn" onclick="hidePopup()">&times;</span>
-    <div class="popup-title">${pileId}号充电桩</div>
-    <div class="popup-row"><span class="lbl">类型：</span><span class="val">${pt.type} ${pt.power}</span></div>
   `;
 
   popup.style.display = 'block';
@@ -214,24 +248,13 @@ function updatePileFooter() {
   document.getElementById('pilesBusy').textContent = busy || '-';
 }
 
-// ---- Clock ----
-function updateClock() {
-  const now = new Date();
-  const el = document.getElementById('clock');
-  if (el) {
-    el.textContent = now.toLocaleString('zh-CN', {
-      year:'numeric', month:'2-digit', day:'2-digit',
-      hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
-    });
-  }
-}
-
 // ---- Data polling ----
 async function pollParking() {
   const result = await getParkingStatus();
   if (result && result.spaces) {
     parkingData = {};
     result.spaces.forEach(s => { parkingData[s.space_id] = s; });
+    renderCarOverlays();
     renderCars();
     updateFooter(result);
   }
@@ -245,7 +268,7 @@ async function pollGuns() {
     renderPiles();
     updatePileFooter();
   } else {
-    renderPiles(); // Render with default state
+    renderPiles();
   }
 }
 
@@ -253,23 +276,31 @@ async function pollPiles() {
   const result = await getChargingPiles();
   if (result && result.result) {
     pileData = {};
+    // Build pile ID -> display index mapping
+    // Sort by known IDs order (matching lizi's ids array)
+    const knownIds = [2312,2240,2241,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
+    pileIdToIndex = {};
     result.result.forEach(p => { pileData[p.id] = p; });
+    knownIds.forEach((id, idx) => { pileIdToIndex[id] = idx + 1; });
+    // Also map any unknown piles by position
+    let nextIdx = knownIds.length + 1;
+    result.result.forEach(p => {
+      if (!(p.id in pileIdToIndex)) { pileIdToIndex[p.id] = nextIdx++; }
+    });
   }
 }
 
 // ---- Init ----
 document.addEventListener('DOMContentLoaded', () => {
-  updateClock();
-  setInterval(updateClock, 1000);
-
   // Initial render with empty state
+  renderCarOverlays();
   renderCars();
   renderPiles();
 
   // Start polling
   startPolling(pollParking, 3000);
   startPolling(pollGuns, 5000);
-  pollPiles(); // One-time load
+  pollPiles();
 
   // Close popup on outside click
   document.addEventListener('click', (e) => {

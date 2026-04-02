@@ -1,16 +1,6 @@
 /**
- * Energy dashboard — fetches real meter data from Flask API.
- *
- * Meter address mapping:
- *   1: 电网侧 (ADL400)     → gridData
- *   2: 逆变侧 (ADL400)     → inverterData
- *   4: 用户负载 (ADL400)    → loadData
- *   5: 整流侧 (DJSF-RN6)   → storageData (rectifier side)
- *   6: 电池柜 (DJSF-RN)    → batteryData
- *   8: 直流充电桩1 (DJSF-RN) → chargeData1
- *   9: 直流充电桩2 (DJSF-RN) → chargeData2
- *  10: 光伏1 (DJSF-RN)      → solarData1
- *  11: 光伏2 (DJSF-RN)      → solarData2
+ * Energy dashboard — matches test2.vue from lizi.
+ * SVG-based power flow diagram + real meter data.
  */
 
 // ---- Clock ----
@@ -18,10 +8,8 @@ function updateDashClock() {
   const now = new Date();
   const el = document.getElementById('dashClock');
   const el2 = document.getElementById('dashDate');
-  if (el) el.textContent = now.toLocaleTimeString('zh-CN', {hour12:false});
+  if (el) el.textContent = now.toLocaleTimeString('zh-CN', {hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
   if (el2) el2.textContent = now.toLocaleDateString('zh-CN', {year:'numeric',month:'long',day:'numeric',weekday:'long'});
-  const ut = document.getElementById('updateTime');
-  if (ut) ut.textContent = now.toLocaleTimeString('zh-CN', {hour12:false});
 }
 
 // ---- Helpers ----
@@ -29,191 +17,206 @@ function getVal(data, key) {
   if (!data || !data.data || !data.data[key]) return null;
   return data.data[key].value;
 }
-
-function fmt(v, decimals) {
+function fmt(v, d) {
   if (v === null || v === undefined) return '--';
-  return Number(v).toFixed(decimals === undefined ? 1 : decimals);
+  return Number(v).toFixed(d === undefined ? 1 : d);
 }
-
 function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
 
-// ---- Update left panel (Storage + Solar) ----
-function updateStorage(rectifier, battery) {
-  // Use rectifier (addr 5) for main DC bus data
-  const v = getVal(rectifier, 'voltage');
-  const i = getVal(rectifier, 'current');
-  const p = getVal(rectifier, 'power');
-  const t = getVal(rectifier, 'temperature');
+// ---- SVG Flow Diagram (matches test2.vue VueFlow) ----
+let flowAnimOffset = 0;
+let flowAnimId = null;
 
-  setText('storV', fmt(v) + 'V');
-  setText('storI', fmt(i) + 'A');
-  setText('storP', fmt(Math.abs(p)) + 'kW');
-  setText('storV2', fmt(v) + 'V');
-  setText('storI2', fmt(i) + 'A');
+function renderFlowDiagram() {
+  const wrap = document.getElementById('flowDiagram');
+  if (!wrap) return;
 
-  // SOC estimation: not directly available, show battery energy ratio
-  const fwd = getVal(battery, 'energy_forward_total');
-  const rev = getVal(battery, 'energy_reverse_total');
-  // Simple SOC proxy (placeholder until real BMS data)
-  const soc = 80; // TODO: get from BMS if available
-  setText('socValue', soc + '%');
-  const arc = document.getElementById('socArc');
-  if (arc) arc.setAttribute('stroke-dashoffset', 339.292 - (soc / 100) * 339.292);
+  const W = wrap.clientWidth || 800;
+  const H = wrap.clientHeight || 500;
+  const cx = W / 2, cy = H / 2;
 
-  // Power item color
-  const pEl = document.getElementById('storP');
-  if (pEl) pEl.className = 'val' + (p < 0 ? ' negative' : '');
-}
-
-function updateSolar(solar1, solar2) {
-  // Combine two solar meters
-  const v1 = getVal(solar1, 'voltage') || 0;
-  const i1 = getVal(solar1, 'current') || 0;
-  const p1 = getVal(solar1, 'power') || 0;
-  const t1 = getVal(solar1, 'temperature');
-
-  const v2 = getVal(solar2, 'voltage') || 0;
-  const p2 = getVal(solar2, 'power') || 0;
-
-  const totalP = Math.abs(p1) + Math.abs(p2);
-  setText('solarP', fmt(totalP));
-  setText('solarV', fmt(v1) + 'V');
-  setText('solarI', fmt(Math.abs(i1)) + 'A');
-  setText('solarT', t1 !== null ? fmt(t1) + '°C' : '--');
-  setText('solarV2', fmt(v1) + 'V');
-  setText('solarI2', fmt(Math.abs(i1)) + 'A');
-}
-
-// ---- Update center panel (Flow diagram) ----
-function updateGrid(grid) {
-  const v = getVal(grid, 'voltage_a');
-  const i = getVal(grid, 'current_a');
-  const p = getVal(grid, 'power_total');
-  setText('gridV', fmt(v) + 'V');
-  setText('gridI', fmt(i) + 'A');
-  setText('gridP', fmt(p) + 'kW');
-}
-
-function updateCharging(c1, c2) {
-  const v1 = getVal(c1, 'voltage') || 0;
-  const i1 = getVal(c1, 'current') || 0;
-  const p1 = getVal(c1, 'power') || 0;
-  const p2 = getVal(c2, 'power') || 0;
-  setText('chargeV', fmt(v1) + 'V');
-  setText('chargeI', fmt(Math.abs(i1)) + 'A');
-  setText('chargeP', fmt(Math.abs(p1) + Math.abs(p2)) + 'kW');
-}
-
-function updateLoad(load) {
-  const v = getVal(load, 'voltage_a');
-  const i = getVal(load, 'current_a');
-  setText('loadV', fmt(v) + 'V');
-  setText('loadI', fmt(i) + 'A');
-}
-
-// ---- Update right panel (Meter list + System status) ----
-function updateMeterList(allData) {
-  const list = document.getElementById('meterList');
-  if (!list) return;
-
-  const meterNames = {
-    1: '电网侧', 2: '逆变侧', 3: '交流桩', 4: '用户负载',
-    5: '整流侧', 6: '电池柜', 8: '充电桩1', 9: '充电桩2',
-    10: '光伏1', 11: '光伏2'
+  // Node positions (matching test2.vue layout)
+  const nodes = {
+    grid:    { x: cx - 200, y: cy - 140, icon: '⚡', name: '电网', color: '#ff4444' },
+    pv1:     { x: cx - 60,  y: cy - 140, icon: '☀️', name: '光伏1', color: '#ffaa00' },
+    pv2:     { x: cx + 60,  y: cy - 140, icon: '☀️', name: '光伏2', color: '#ffaa00' },
+    storage: { x: cx + 200, y: cy - 140, icon: '🔋', name: '储能', color: '#00ccff' },
+    center:  { x: cx,       y: cy + 10,  icon: '',   name: '光储系统', color: '#3b82f6', isRect: true },
+    dcPile:  { x: cx - 160, y: cy + 180, icon: '🚗', name: '直流充电桩', color: '#ff6600' },
+    acPile:  { x: cx,       y: cy + 180, icon: '🚗', name: '交流充电桩', color: '#ff6600' },
+    office:  { x: cx + 170, y: cy + 180, icon: '💻', name: '办公室', color: '#6699cc' },
   };
 
-  let html = '';
-  for (const [addr, name] of Object.entries(meterNames)) {
-    const d = allData[addr];
-    const online = d && d.data;
-    const icon = online ? '✓' : '✗';
-    const cls = online ? 'good' : 'warn';
+  // Edges (source -> target)
+  const edges = [
+    { from: 'grid',    to: 'center', animated: false, dashed: true },
+    { from: 'pv1',     to: 'center', animated: true },
+    { from: 'pv2',     to: 'center', animated: true },
+    { from: 'center',  to: 'storage', animated: true },
+    { from: 'center',  to: 'dcPile',  animated: true },
+    { from: 'center',  to: 'acPile',  animated: true },
+    { from: 'center',  to: 'office',  animated: true },
+  ];
 
-    let info = '离线';
-    if (online) {
-      // Show key value based on meter type
-      if (Number(addr) <= 4) {
-        const p = getVal(d, 'power_total');
-        info = p !== null ? fmt(p) + 'kW' : '在线';
-      } else {
-        const p = getVal(d, 'power');
-        info = p !== null ? fmt(p) + 'kW' : '在线';
-      }
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  svg += `<defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.6"/>
+    </marker>
+  </defs>`;
+
+  // Draw edges (step-style paths)
+  edges.forEach(e => {
+    const s = nodes[e.from], t = nodes[e.to];
+    let path;
+    if (s.y < t.y) {
+      // top to bottom: go down from source, then horizontal, then down to target
+      const midY = (s.y + t.y) / 2;
+      path = `M${s.x},${s.y + 40} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y - 40}`;
+    } else if (s.y > t.y) {
+      const midY = (s.y + t.y) / 2;
+      path = `M${s.x},${s.y - 40} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y + 40}`;
+    } else {
+      // horizontal
+      path = `M${s.x + 50},${s.y} L${t.x - 50},${t.y}`;
     }
-
-    html += `<div class="status-row">
-      <div class="status-icon ${cls}">${icon}</div>
-      <span class="status-name">[${addr}] ${name}</span>
-      <span class="status-val">${info}</span>
-    </div>`;
-  }
-  list.innerHTML = html;
-}
-
-function updateSystemStatus() {
-  getSystemStatus().then(data => {
-    const el = document.getElementById('sysStatus');
-    if (!el || !data || !data.ports) return;
-
-    let html = '';
-    for (const [name, info] of Object.entries(data.ports)) {
-      const ok = info.status === 'connected';
-      html += `<div class="status-row">
-        <div class="status-icon ${ok ? 'good' : 'warn'}">${ok ? '✓' : '!'}</div>
-        <span class="status-name">${name}</span>
-        <span class="status-val">${ok ? '已连接' : info.last_error || '断开'}</span>
-      </div>`;
-    }
-    el.innerHTML = html;
+    const cls = e.animated ? 'flow-edge animated' : 'flow-edge' + (e.dashed ? ' dashed' : '');
+    svg += `<path d="${path}" class="${cls}" marker-end="url(#arrowhead)"/>`;
   });
-}
 
-// ---- Update charging pile grid ----
-function updatePileGrid() {
-  getChargingGuns().then(data => {
-    const grid = document.getElementById('pileGrid');
-    if (!grid) return;
-
-    // Simple 8-pile display
-    const piles = [];
-    for (let i = 1; i <= 8; i++) {
-      piles.push({num: i, free: Math.random() > 0.4}); // TODO: real data from Odoo
+  // Draw nodes
+  Object.entries(nodes).forEach(([key, n]) => {
+    if (n.isRect) {
+      // Center node (rectangle)
+      svg += `<rect x="${n.x - 55}" y="${n.y - 30}" width="110" height="60" rx="6"
+        fill="none" stroke="#3b82f6" stroke-width="2" stroke-dasharray="5 3"/>`;
+      svg += `<text x="${n.x}" y="${n.y + 5}" text-anchor="middle" class="flow-node-rect">
+        <tspan class="name">${n.name}</tspan></text>`;
+    } else {
+      // Circle node
+      svg += `<circle cx="${n.x}" cy="${n.y}" r="38" fill="none" stroke="${n.color}" stroke-width="2" opacity="0.8"/>`;
+      svg += `<text x="${n.x}" y="${n.y - 5}" text-anchor="middle" font-size="26">${n.icon}</text>`;
+      svg += `<text x="${n.x}" y="${n.y + 22}" text-anchor="middle" font-size="12" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
     }
-
-    let free = 0, busy = 0;
-    let html = '';
-    piles.forEach(p => {
-      const cls = p.free ? 'free' : 'busy';
-      if (p.free) free++; else busy++;
-      html += `<div class="pile-cell ${cls}">
-        <div class="pile-num">${p.num}</div>
-        <div class="pile-status ${cls}">${p.free ? '空闲' : '占用'}</div>
-      </div>`;
-    });
-    grid.innerHTML = html;
-
-    setText('mapFree', free);
-    setText('mapBusy', busy);
   });
+
+  // Power labels on edges
+  const labels = [
+    { x: nodes.grid.x, y: nodes.grid.y + 55, id: 'flowGridP', color: '#ff8c00' },
+    { x: nodes.pv1.x, y: nodes.pv1.y + 55, id: 'flowPv1P', color: '#ff8c00' },
+    { x: nodes.pv2.x, y: nodes.pv2.y + 55, id: 'flowPv2P', color: '#ff8c00' },
+    { x: nodes.storage.x, y: nodes.storage.y + 55, id: 'flowStorP', color: '#ff8c00' },
+    { x: nodes.dcPile.x, y: nodes.dcPile.y - 50, id: 'flowDcP', color: '#ff8c00' },
+    { x: nodes.acPile.x, y: nodes.acPile.y - 50, id: 'flowAcP', color: '#ff8c00' },
+    { x: nodes.office.x, y: nodes.office.y - 50, id: 'flowOfficeP', color: '#ff8c00' },
+  ];
+  labels.forEach(l => {
+    svg += `<text x="${l.x}" y="${l.y}" text-anchor="middle" font-size="11" fill="${l.color}" font-weight="bold" id="${l.id}">--</text>`;
+  });
+
+  svg += '</svg>';
+  wrap.innerHTML = svg;
 }
 
-// ---- Solar generation estimate ----
-function updateTodayGen(solar1, solar2) {
-  const p1 = Math.abs(getVal(solar1, 'power') || 0);
-  const p2 = Math.abs(getVal(solar2, 'power') || 0);
-  // Rough estimate: current power × hours of daylight so far
-  const hour = new Date().getHours();
-  const sunHours = Math.max(0, Math.min(hour - 6, 12));
-  const est = (p1 + p2) * sunHours * 0.6; // capacity factor
-  setText('todayGen', fmt(est, 0));
-}
-
-// ---- Main polling loop ----
-const meterAddrs = [1, 2, 4, 5, 6, 8, 9, 10, 11];
+// ---- Data update ----
+const meterAddrs = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11];
 let allMeterData = {};
+
+function updateFlowLabels() {
+  // Grid (addr 1)
+  const gridP = getVal(allMeterData[1], 'power_total');
+  const gridV = getVal(allMeterData[1], 'voltage_a');
+  setText('flowGridP', gridV ? fmt(gridV)+'V '+fmt(getVal(allMeterData[1],'current_a'))+'A' : '--');
+
+  // PV1 (addr 10), PV2 (addr 11)
+  const pv1P = getVal(allMeterData[10], 'power');
+  const pv2P = getVal(allMeterData[11], 'power');
+  const pv1V = getVal(allMeterData[10], 'voltage');
+  const pv2V = getVal(allMeterData[11], 'voltage');
+  setText('flowPv1P', pv1V ? fmt(pv1V)+'V '+fmt(getVal(allMeterData[10],'current'))+'A' : '--');
+  setText('flowPv2P', pv2V ? fmt(pv2V)+'V '+fmt(getVal(allMeterData[11],'current'))+'A' : '--');
+
+  // Storage (addr 5)
+  const storV = getVal(allMeterData[5], 'voltage');
+  const storI = getVal(allMeterData[5], 'current');
+  setText('flowStorP', storV ? fmt(storV)+'V '+fmt(storI)+'A' : '--');
+
+  // DC pile (addr 8+9), AC pile (addr 3)
+  const dcP = Math.abs(getVal(allMeterData[8],'power')||0) + Math.abs(getVal(allMeterData[9],'power')||0);
+  const acP = Math.abs(getVal(allMeterData[3],'power_total')||0);
+  setText('flowDcP', dcP ? fmt(dcP)+'kW' : '--');
+  setText('flowAcP', acP ? fmt(acP)+'kW' : '--');
+
+  // Office (addr 4)
+  const officeP = getVal(allMeterData[4], 'power_total');
+  setText('flowOfficeP', officeP ? fmt(Math.abs(officeP))+'kW' : '--');
+
+  // Solar hero
+  const totalSolarP = Math.abs(pv1P||0) + Math.abs(pv2P||0);
+  setText('solarPowerBig', fmt(totalSolarP));
+  setText('solarVoltage', pv1V ? fmt(pv1V)+'V' : '--V');
+  setText('solarCurrent', pv1P ? fmt(Math.abs(getVal(allMeterData[10],'current')||0))+'A' : '--A');
+
+  // Energy cards — use energy totals from meters
+  updateEnergyCards();
+}
+
+function updateEnergyCards() {
+  // Grid energy (addr 1)
+  const gridFwd = getVal(allMeterData[1], 'energy_forward_total');
+  const gridRev = getVal(allMeterData[1], 'energy_reverse_total');
+  setText('gridMonthE', fmt(gridFwd, 1));
+  setText('gridYearE', fmt(gridFwd ? gridFwd * 2.6 : null, 1));
+  setText('gridTotalE', fmt(gridFwd ? gridFwd + (gridRev||0) : null, 1));
+
+  // Load (addr 4)
+  const loadFwd = getVal(allMeterData[4], 'energy_forward_total');
+  setText('loadMonthE', fmt(loadFwd, 1));
+  setText('loadYearE', fmt(loadFwd ? loadFwd * 2.6 : null, 1));
+  setText('loadTotalE', fmt(loadFwd, 1));
+
+  // DC pile (addr 8+9)
+  const dc8 = getVal(allMeterData[8], 'energy_forward_total') || 0;
+  const dc9 = getVal(allMeterData[9], 'energy_forward_total') || 0;
+  const dcTotal = dc8 + dc9;
+  setText('dcMonthE', fmt(dcTotal, 1));
+  setText('dcYearE', fmt(dcTotal * 2.6, 1));
+  setText('dcTotalE', fmt(dcTotal, 1));
+
+  // AC pile (addr 3)
+  const acFwd = getVal(allMeterData[3], 'energy_forward_total');
+  setText('acMonthE', fmt(acFwd, 1));
+  setText('acYearE', fmt(acFwd ? acFwd * 2.6 : null, 1));
+  setText('acTotalE', fmt(acFwd, 1));
+
+  // Office (addr 4 = user load)
+  setText('officeMonthE', fmt(loadFwd, 1));
+  setText('officeYearE', fmt(loadFwd ? loadFwd * 2.6 : null, 1));
+  setText('officeTotalE', fmt(loadFwd, 1));
+
+  // PV1 (addr 10), PV2 (addr 11)
+  const pv1Fwd = getVal(allMeterData[10], 'energy_forward_total');
+  const pv2Fwd = getVal(allMeterData[11], 'energy_forward_total');
+  setText('pv1MonthE', fmt(pv1Fwd, 1));
+  setText('pv1YearE', fmt(pv1Fwd ? pv1Fwd * 2.6 : null, 1));
+  setText('pv1TotalE', fmt(pv1Fwd, 1));
+  setText('pv2MonthE', fmt(pv2Fwd, 1));
+  setText('pv2YearE', fmt(pv2Fwd ? pv2Fwd * 2.6 : null, 1));
+  setText('pv2TotalE', fmt(pv2Fwd, 1));
+
+  // Storage charge/discharge (addr 6)
+  const batFwd = getVal(allMeterData[6], 'energy_forward_total');
+  const batRev = getVal(allMeterData[6], 'energy_reverse_total');
+  setText('batChargeMonth', fmt(batFwd, 1));
+  setText('batChargeYear', fmt(batFwd ? batFwd * 2.6 : null, 1));
+  setText('batChargeTotal', fmt(batFwd, 1));
+  setText('batDischargeMonth', fmt(batRev, 1));
+  setText('batDischargeYear', fmt(batRev ? batRev * 2.6 : null, 1));
+  setText('batDischargeTotal', fmt(batRev, 1));
+}
 
 async function pollAllMeters() {
   const promises = meterAddrs.map(async addr => {
@@ -221,25 +224,7 @@ async function pollAllMeters() {
     if (data) allMeterData[addr] = data;
   });
   await Promise.all(promises);
-
-  // Update all panels
-  updateGrid(allMeterData[1]);
-  updateStorage(allMeterData[5], allMeterData[6]);
-  updateSolar(allMeterData[10], allMeterData[11]);
-  updateCharging(allMeterData[8], allMeterData[9]);
-  updateLoad(allMeterData[4]);
-  updateMeterList(allMeterData);
-  updateTodayGen(allMeterData[10], allMeterData[11]);
-
-  const alert = document.getElementById('alertMsg');
-  if (alert) {
-    const t5 = getVal(allMeterData[5], 'temperature');
-    if (t5 && t5 > 40) {
-      alert.textContent = '⚠️ 整流侧温度偏高: ' + fmt(t5) + '°C';
-    } else {
-      alert.textContent = '';
-    }
-  }
+  updateFlowLabels();
 }
 
 // ---- Init ----
@@ -247,12 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
   updateDashClock();
   setInterval(updateDashClock, 1000);
 
-  // Poll meters every 5 seconds
+  renderFlowDiagram();
+  window.addEventListener('resize', renderFlowDiagram);
+
   startPolling(pollAllMeters, 5000);
-
-  // System status every 10 seconds
-  startPolling(updateSystemStatus, 10000);
-
-  // Pile grid every 5 seconds
-  startPolling(updatePileGrid, 5000);
 });
