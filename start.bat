@@ -31,12 +31,14 @@ if not exist "venv\.deps_installed" (
     echo Installing dependencies...
     pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
     copy /y requirements.txt venv\.deps_installed >nul
+    del /q venv\.deps_ok 2>nul
 ) else (
     fc /b requirements.txt venv\.deps_installed >nul 2>&1
     if %ERRORLEVEL% NEQ 0 (
         echo Updating dependencies...
         pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple
         copy /y requirements.txt venv\.deps_installed >nul
+        del /q venv\.deps_ok 2>nul
     ) else (
         echo Dependencies up to date.
     )
@@ -45,8 +47,8 @@ echo.
 
 REM Start unified server (MQTT WS bridge + Meter API)
 echo [3/3] Starting unified server...
-echo   MQTT WS bridge: serial/comXX/up, serial/comXX/down
-echo   Meter API: http://localhost:8000/docs
+echo   Web UI: http://localhost:8000/
+echo   Energy Dashboard: http://localhost:8000/detail.html
 echo ============================================
 python server.py
 
