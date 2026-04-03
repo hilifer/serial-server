@@ -98,6 +98,12 @@ def get_meter(addr: int) -> MeterInfo:
 def handle_error(e):
     return jsonify({"error": e.description}), e.code
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    """Catch all unhandled exceptions — never crash the server."""
+    logger.error("Unhandled exception: %s", e, exc_info=True)
+    return jsonify({"error": "内部错误，请稍后重试"}), 500
+
 
 # ---------------------------------------------------------------------------
 # CORS support
