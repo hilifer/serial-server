@@ -7,3 +7,5 @@ venv/
 .idea/
 .vscode/
 lizi/
+installer/build/
+installer/output/
