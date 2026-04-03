@@ -34,22 +34,25 @@ const CAR_POSITIONS = [
   {id:53, left:81.95, top:62.99}, {id:54, left:82.36, top:67.29},
 ];
 
-// 18 charging pile positions (left%, top%) — from zhuang/*.png extraction
+// 18 charging pile positions (left%, top%)
+// Numbered from rightmost column, top-to-bottom, right-to-left:
+//   col6(right): 1,2,3  col5: 4,5,6  col4: 7,8,9
+//   col3: 10,11,12  col2: 13,14,15  col1(left): 16,17,18
 const PILE_POSITIONS = [
-  {id:1,  left:6.03,  top:27.92}, {id:2,  left:4.39,  top:41.85},
-  {id:3,  left:2.90,  top:57.78}, {id:4,  left:29.52, top:27.82},
-  {id:5,  left:29.18, top:42.59}, {id:6,  left:28.76, top:58.29},
-  {id:7,  left:35.35, top:27.78}, {id:8,  left:35.04, top:42.36},
-  {id:9,  left:34.73, top:58.10}, {id:10, left:55.46, top:27.73},
-  {id:11, left:56.08, top:42.41}, {id:12, left:56.71, top:58.19},
-  {id:13, left:61.25, top:27.82}, {id:14, left:62.02, top:42.31},
-  {id:15, left:62.70, top:58.01}, {id:16, left:81.32, top:28.19},
-  {id:17, left:82.77, top:42.92}, {id:18, left:84.34, top:59.03},
+  {id:16, left:6.03,  top:27.92}, {id:17, left:4.39,  top:41.85},
+  {id:18, left:2.90,  top:57.78}, {id:13, left:29.52, top:27.82},
+  {id:14, left:29.18, top:42.59}, {id:15, left:28.76, top:58.29},
+  {id:10, left:35.35, top:27.78}, {id:11, left:35.04, top:42.36},
+  {id:12, left:34.73, top:58.10}, {id:7,  left:55.46, top:27.73},
+  {id:8,  left:56.08, top:42.41}, {id:9,  left:56.71, top:58.19},
+  {id:4,  left:61.25, top:27.82}, {id:5,  left:62.02, top:42.31},
+  {id:6,  left:62.70, top:58.01}, {id:1,  left:81.32, top:28.19},
+  {id:2,  left:82.77, top:42.92}, {id:3,  left:84.34, top:59.03},
 ];
 
-// Pile type: piles 2,3 are DC 120kW, rest are AC 7kW
-function getPileType(index) {
-  return (index === 1 || index === 2) ? {type:'直流', power:'120kW'} : {type:'交流', power:'7kW'};
+// Pile type by pile ID: 2号,3号 are DC 120kW, rest are AC 7kW
+function getPileTypeById(pileId) {
+  return (pileId === 2 || pileId === 3) ? {type:'直流', power:'120kW'} : {type:'交流', power:'7kW'};
 }
 
 // State
@@ -98,7 +101,7 @@ function renderPiles() {
   layer.innerHTML = '';
 
   PILE_POSITIONS.forEach((pos, idx) => {
-    const pileType = getPileType(idx);
+    const pileType = getPileTypeById(pos.id);
     const isFree = isPileFree(pos.id);
     const statusClass = isFree ? 'free' : 'busy';
 
