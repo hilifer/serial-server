@@ -57,23 +57,32 @@ let parkingData = {};   // {space_id: {status, label}}
 let gunData = {};       // {gun_id: gun_object}
 let pileData = {};      // {pile_id: pile_object}
 
-// ---- Render per-position car overlay images (matches D2Viewer.vue car/N.png) ----
+// ---- Render per-position car overlay images ----
+// Only load images for occupied spaces (saves bandwidth)
+let loadedCarImages = {};
 function renderCarOverlays() {
   const layer = document.getElementById('carOverlayLayer');
   if (!layer) return;
-  layer.innerHTML = '';
 
   for (let i = 1; i <= 54; i++) {
     const space = parkingData[i];
     const occupied = space && space.status === 1;
+    const existing = loadedCarImages[i];
 
-    const img = document.createElement('img');
-    img.src = '/images/car/' + i + '.png';
-    img.className = 'car-overlay-img';
-    img.loading = 'lazy';
-    img.style.display = occupied ? 'block' : 'none';
-    img.dataset.spaceId = i;
-    layer.appendChild(img);
+    if (occupied && !existing) {
+      // Create new image only when occupied
+      const img = document.createElement('img');
+      img.src = '/images/car/' + i + '.png';
+      img.className = 'car-overlay-img';
+      img.loading = 'lazy';
+      img.dataset.spaceId = i;
+      layer.appendChild(img);
+      loadedCarImages[i] = img;
+    } else if (occupied && existing) {
+      existing.style.display = 'block';
+    } else if (!occupied && existing) {
+      existing.style.display = 'none';
+    }
   }
 }
 
