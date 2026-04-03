@@ -124,17 +124,17 @@ a{color:inherit;text-decoration:none}
 
 /* Main 3-column — flex, fills remaining space */
 .dash-main{
-  display:flex;gap:clamp(14px,1.5vw,28px);padding:clamp(14px,1.5vw,28px);
+  display:flex;gap:clamp(16px,2vw,32px);padding:clamp(16px,2vw,32px);
   flex:1;min-height:0;position:relative;z-index:5;
 }
-.dash-col{display:flex;flex-direction:column;gap:clamp(14px,2vh,24px);min-height:0;overflow-y:auto;overflow-x:hidden}
+.dash-col{display:flex;flex-direction:column;gap:clamp(14px,2vh,24px);min-height:0;overflow:hidden}
 .dash-col::-webkit-scrollbar{width:3px}
 .dash-col::-webkit-scrollbar-thumb{background:rgba(0,200,255,.2);border-radius:2px}
 .dash-col:nth-child(1){flex:1}
 .dash-col:nth-child(2){flex:2}
 .dash-col:nth-child(3){flex:1}
-/* Cards don't stretch — use natural height, scroll if needed */
-.dash-col>.panel-card{flex:0 0 auto;display:flex;flex-direction:column}
+/* Cards stretch to fill column height */
+.dash-col>.panel-card{flex:1;min-height:0;display:flex;flex-direction:column}
 
 /* Panel card */
 .panel-card{
@@ -205,11 +205,21 @@ a{color:inherit;text-decoration:none}
 .vi-label{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.6);margin-bottom:2px}
 .vi-value{font-size:clamp(12px,1.4vw,18px);font-weight:bold;color:#fff}
 
-/* Center column: flow panel fills, office card stays compact */
-.dash-col:nth-child(2)>.panel-card{flex:0 0 auto}
+/* Left column: 4 cards — direct ratio by content lines */
+.dash-col:nth-child(1)>.panel-card:nth-child(1){flex:2} /* 电网: title+3 metrics */
+.dash-col:nth-child(1)>.panel-card:nth-child(2){flex:2} /* 负载: title+3 metrics */
+.dash-col:nth-child(1)>.panel-card:nth-child(3){flex:4} /* 直流桩: title+2 sub×3 metrics */
+.dash-col:nth-child(1)>.panel-card:nth-child(4){flex:2} /* 交流桩: title+3 metrics */
+
+/* Center column: flow takes most, office fills rest */
 .dash-col:nth-child(2){overflow:hidden}
-.flow-panel{flex:1 1 0!important;min-height:0}
+.flow-panel{flex:7!important;min-height:0}
 .flow-panel .card-hdr{margin-bottom:0}
+.office-card{flex:3!important}
+
+/* Right column: solar 5 : storage 4 */
+.dash-col:nth-child(3)>.panel-card:first-child{flex:5}
+.dash-col:nth-child(3)>.panel-card:last-child{flex:4}
 .flow-canvas-wrap{
   width:100%;flex:1;min-height:0;position:relative;overflow:hidden;
   background:rgba(0,0,0,.2);border-radius:clamp(8px,1vw,15px);
