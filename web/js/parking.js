@@ -307,8 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderPiles();
 
   // Start polling
-  startPolling(pollParking, 3000);
-  startPolling(pollGuns, 5000);
+  startPolling(pollParking, 30000); // 30秒读一次车位
+  startPolling(pollGuns, 30000);    // 30秒读一次充电枪
   pollPiles();
 
   // Close popup on outside click

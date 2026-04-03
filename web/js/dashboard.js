@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   updateDashClock();setInterval(updateDashClock,1000);
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
-  startPolling(pollAllMeters,5000);
+  startPolling(pollAllMeters,60000); // 1分钟读一次电表
   setInterval(()=>{if(!hasRealData)updateFlowLabels()},2000);
   setTimeout(updateFlowLabels,300);
 });

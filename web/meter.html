@@ -209,7 +209,7 @@ async function poll() {
 updateClock();
 setInterval(updateClock, 1000);
 poll();
-setInterval(poll, 3000);
+setInterval(poll, 60000); // 1分钟读一次
 </script>
 </body>
 </html>
