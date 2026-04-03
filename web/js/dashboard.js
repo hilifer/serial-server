@@ -260,8 +260,10 @@ function updateEnergyCards(real){
     const lF=getVal(allMeterData[4],'energy_forward_total'),lC=getVal(allMeterData[4],'energy_combined_total');
     setText('loadMonthE',fmt(lF,1));setText('loadYearE',fmt(lF,1));setText('loadTotalE',fmt(lC||lF,1));
     setText('officeMonthE',fmt(lF,1));setText('officeYearE',fmt(lF,1));setText('officeTotalE',fmt(lC||lF,1));
-    const d8=getVal(allMeterData[8],'energy_forward_total')||0,d9=getVal(allMeterData[9],'energy_forward_total')||0;
-    setText('dcMonthE',fmt(d8+d9,1));setText('dcYearE',fmt(d8+d9,1));setText('dcTotalE',fmt(d8+d9,1));
+    const d8=getVal(allMeterData[8],'energy_forward_total')||0;
+    const d9=getVal(allMeterData[9],'energy_forward_total')||0;
+    setText('dc1MonthE',fmt(d8,1));setText('dc1YearE',fmt(d8,1));setText('dc1TotalE',fmt(d8,1));
+    setText('dc2MonthE',fmt(d9,1));setText('dc2YearE',fmt(d9,1));setText('dc2TotalE',fmt(d9,1));
     const aF=getVal(allMeterData[3],'energy_forward_total'),aC=getVal(allMeterData[3],'energy_combined_total');
     setText('acMonthE',fmt(aF,1));setText('acYearE',fmt(aF,1));setText('acTotalE',fmt(aC||aF,1));
     const p1R=getVal(allMeterData[10],'energy_reverse_total'),p2R=getVal(allMeterData[11],'energy_reverse_total');
@@ -272,9 +274,9 @@ function updateEnergyCards(real){
     setText('batDischargeMonth',fmt(bR,1));setText('batDischargeYear',fmt(bR,1));setText('batDischargeTotal',fmt(bR,1));
   }else{
     const v=fmt(sim.grid.p,1),n=fmt(sim.grid.p*8,1);
-    ['gridMonthE','loadMonthE','dcMonthE','acMonthE','officeMonthE','pv1MonthE','pv2MonthE','batChargeMonth','batDischargeMonth'].forEach(id=>setText(id,v));
-    ['gridYearE','loadYearE','dcYearE','acYearE','officeYearE','pv1YearE','pv2YearE','batChargeYear','batDischargeYear'].forEach(id=>setText(id,n));
-    ['gridTotalE','loadTotalE','dcTotalE','acTotalE','officeTotalE','pv1TotalE','pv2TotalE','batChargeTotal','batDischargeTotal'].forEach(id=>setText(id,n));
+    ['gridMonthE','loadMonthE','dc1MonthE','dc2MonthE','acMonthE','officeMonthE','pv1MonthE','pv2MonthE','batChargeMonth','batDischargeMonth'].forEach(id=>setText(id,v));
+    ['gridYearE','loadYearE','dc1YearE','dc2YearE','acYearE','officeYearE','pv1YearE','pv2YearE','batChargeYear','batDischargeYear'].forEach(id=>setText(id,n));
+    ['gridTotalE','loadTotalE','dc1TotalE','dc2TotalE','acTotalE','officeTotalE','pv1TotalE','pv2TotalE','batChargeTotal','batDischargeTotal'].forEach(id=>setText(id,n));
   }
 }
 
