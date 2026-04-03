@@ -26,9 +26,34 @@ logger = logging.getLogger("serial-server")
 
 
 def load_config(path: str = "config.yaml") -> dict:
+    # Try external config.yaml first, fallback to built-in defaults
     config_path = Path(__file__).parent / path
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    # Built-in default configuration
+    return {
+        "mqtt": {
+            "broker": "localhost",
+            "port": 1883,
+            "ws_port": 9001,
+            "username": "",
+            "password": "",
+            "client_id_prefix": "serial-server",
+            "keepalive": 60,
+        },
+        "serial_ports": [
+            {"name": "COM31", "port": "COM31", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com31"},
+            {"name": "COM32", "port": "COM32", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com32"},
+            {"name": "COM33", "port": "COM33", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com33"},
+        ],
+        "parking": {"enabled": True, "poll_interval": 5},
+        "logging": {"level": "INFO", "file": "serial_server.log"},
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -39,7 +39,6 @@ jobs:
             --console `
             --strip `
             --optimize 2 `
-            --add-data "config.yaml;." `
             --add-data "web;web" `
             --hidden-import serial_manager `
             --hidden-import meter `
@@ -66,7 +65,6 @@ jobs:
         run: |
           mkdir release
           copy dist\yriot.exe release\
-          copy config.yaml release\
           echo @echo off > release\启动.bat
           echo chcp 65001 ^>nul >> release\启动.bat
           echo title 耀嵘光储充管理系统 >> release\启动.bat
