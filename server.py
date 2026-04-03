@@ -313,23 +313,14 @@ def main():
 
     api_port = config.get("api", {}).get("port", 8000)
     logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)
-
-    # Auto-restart on crash — never exit on errors
-    while True:
-        try:
-            app.run(host="0.0.0.0", port=api_port, threaded=True)
-            break  # Normal exit (Ctrl+C)
-        except SystemExit:
-            break  # Signal handler called sys.exit
-        except Exception as e:
-            logger.error("API server crashed: %s, restarting in 3s...", e,
-                         exc_info=True)
-            time.sleep(3)
+    app.run(host="0.0.0.0", port=api_port, threaded=True)
 
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        print("\n已停止")
     except Exception as e:
         print("\n" + "=" * 50)
         print(f"  启动失败: {e}")
