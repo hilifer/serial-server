@@ -8,4 +8,3 @@ venv/
 .vscode/
 lizi/
 installer/build/
-installer/output/

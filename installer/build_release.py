@@ -22,7 +22,7 @@ PY_FILES = [
     'parking.py', 'state.py', 'deps.py', 'colors.py',
 ]
 COPY_FILES = ['config.yaml', 'requirements.txt']
-COPY_DIRS = ['web', 'docs']
+COPY_DIRS = ['web']
 
 
 def clean():
@@ -132,7 +132,7 @@ def fix_launch():
 
 def create_zip():
     print('[3/4] Creating ZIP package...')
-    zip_path = OUTPUT_DIR / '耀嵘光储充管理系统_v1.0.zip'
+    zip_path = OUTPUT_DIR / 'yriot_v1.0.zip'
 
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(BUILD_DIR):
@@ -189,7 +189,7 @@ def main():
     print()
     print('=' * 50)
     print('  构建完成!')
-    print(f'  输出: installer/output/耀嵘光储充管理系统_v1.0.zip')
+    print(f'  输出: installer/output/yriot_v1.0.zip')
     print('  源码已加密为 .dat 文件，无法直接阅读')
     print('=' * 50)
 
