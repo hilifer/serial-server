@@ -8,3 +8,6 @@ venv/
 .vscode/
 lizi/
 installer/build/
+build/
+dist/
+*.spec
