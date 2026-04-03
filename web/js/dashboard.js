@@ -132,10 +132,13 @@ function renderFlowDiagram(){
   svg+=`<text id="fPv2" x="${N.pv2.x}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold"></text>`;
   // Storage: V A
   svg+=`<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold"></text>`;
-  // Bottom: kW ABOVE
-  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-8}" text-anchor="middle" font-size="${lfs+1}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-8}" text-anchor="middle" font-size="${lfs+1}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-8}" text-anchor="middle" font-size="${lfs+1}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  // Bottom: V/A + kW ABOVE (2 lines each)
+  svg+=`<text id="fDcVA" x="${N.dc.x}" y="${N.dc.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcVA" x="${N.ac.x}" y="${N.ac.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
 
   svg+='</svg>';
   wrap.innerHTML=svg;
@@ -208,8 +211,22 @@ function updateFlowLabels(){
   const sI=real?getVal(allMeterData[5],'current'):sim.storage.i;
   setText('fStor',fmt(sV)+'V '+fmt(sI)+'A');
 
+  // 直流充电桩 (addr 8): V/A + kW
+  const dcV=real?getVal(allMeterData[8],'voltage'):sim.storage.v;
+  const dcI=real?getVal(allMeterData[8],'current'):0;
+  setText('fDcVA',fmt(dcV)+'V '+fmt(Math.abs(dcI))+'A');
   setText('fDc',flowPower.dc?fmt(flowPower.dc)+'kW':'--kW');
+
+  // 交流充电桩 (addr 3): V/A + kW
+  const acV=real?getVal(allMeterData[3],'voltage_a'):sim.grid.v;
+  const acI=real?getVal(allMeterData[3],'current_a'):0;
+  setText('fAcVA',fmt(acV)+'V '+fmt(Math.abs(acI))+'A');
   setText('fAc',flowPower.ac?fmt(flowPower.ac)+'kW':'--kW');
+
+  // 办公室 (addr 4): V/A + kW
+  const offV=real?getVal(allMeterData[4],'voltage_a'):sim.grid.v;
+  const offI=real?getVal(allMeterData[4],'current_a'):0;
+  setText('fOffVA',fmt(offV)+'V '+fmt(Math.abs(offI))+'A');
   setText('fOff',flowPower.office?fmt(flowPower.office)+'kW':'--kW');
 
   // Right panel

@@ -202,10 +202,10 @@ a{color:inherit;text-decoration:none}
 .vi-label{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.6);margin-bottom:2px}
 .vi-value{font-size:clamp(12px,1.4vw,18px);font-weight:bold;color:#fff}
 
-/* Flow diagram */
-.flow-panel{flex:4!important}
+/* Flow diagram — not too big, leave room for office card */
+.flow-panel{flex:3!important}
 .flow-panel .card-hdr{margin-bottom:0}
-.office-card{flex:0 0 auto!important}
+.office-card{flex:1!important}
 .flow-canvas-wrap{
   width:100%;flex:1;min-height:0;position:relative;overflow:hidden;
   background:rgba(0,0,0,.2);border-radius:clamp(8px,1vw,15px);
