@@ -174,10 +174,13 @@ function getGunLinesForPile(pileIndex) {
           const pPower = pile.pile_type === '00' ? '120kW' : '7kW';
           lines.push(pType + '：' + pPower);
         }
-        // Charging details
+        // Charging details — voltage, current, time, energy
         if (gun.status === '03') {
-          if (gun.total_charge_time) lines.push(gun.total_charge_time + '分钟');
-          if (gun.charge_degree) lines.push(gun.charge_degree + '度');
+          if (gun.output_voltage || gun.output_current) {
+            lines.push(gun.output_voltage + 'V ' + gun.output_current + 'A');
+          }
+          if (gun.total_charge_time) lines.push('时长:' + gun.total_charge_time + '分钟');
+          if (gun.charge_degree) lines.push('电量:' + gun.charge_degree + '度');
         }
       }
     }
