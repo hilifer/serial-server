@@ -86,7 +86,7 @@ function renderCarOverlays() {
   }
 }
 
-// ---- Render clickable car layer (matches D2Viewer.vue UPopover triggers) ----
+// ---- Render clickable hotspots (invisible, for popup on click) ----
 function renderCars() {
   const layer = document.getElementById('carsLayer');
   if (!layer) return;
@@ -94,21 +94,12 @@ function renderCars() {
 
   CAR_POSITIONS.forEach(pos => {
     const space = parkingData[pos.id];
-    const occupied = space && space.status === 1;
 
     const div = document.createElement('div');
-    div.className = 'car-item ' + (occupied ? 'occupied' : 'empty');
+    div.className = 'car-hotspot';
     div.style.left = pos.left + '%';
     div.style.top = pos.top + '%';
     div.dataset.spaceId = pos.id;
-
-    const img = document.createElement('img');
-    img.src = '/images/car.png';
-    img.alt = pos.id + '号车位';
-    img.loading = 'lazy';
-    img.style.opacity = occupied ? '1' : '0';
-    div.appendChild(img);
-
     div.addEventListener('click', (e) => showCarPopup(e, pos.id, space));
     layer.appendChild(div);
   });
