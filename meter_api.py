@@ -42,6 +42,7 @@ from parking import (
 )
 
 import os
+import sys
 
 logger = logging.getLogger("meter-api")
 
@@ -49,7 +50,13 @@ logger = logging.getLogger("meter-api")
 # Flask application — serve API + static web files
 # ---------------------------------------------------------------------------
 
-web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+def _get_base_dir():
+    """Get base directory — works both as script and PyInstaller .exe"""
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS  # PyInstaller temp dir
+    return os.path.dirname(os.path.abspath(__file__))
+
+web_dir = os.path.join(_get_base_dir(), "web")
 app = Flask(__name__, static_folder=web_dir, static_url_path="")
 
 

@@ -25,9 +25,18 @@ from serial_manager import SerialManager, create_serial_manager
 logger = logging.getLogger("serial-server")
 
 
+def _get_base_dir():
+    """Get base directory — works both as script and PyInstaller .exe"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+
 def load_config(path: str = "config.yaml") -> dict:
-    # Try external config.yaml first, fallback to built-in defaults
-    config_path = Path(__file__).parent / path
+    # Try external config.yaml first (next to .exe or script)
+    config_path = _get_base_dir() / path
+    if not config_path.exists():
+        config_path = Path(sys.executable).parent / path  # next to .exe
     if config_path.exists():
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
