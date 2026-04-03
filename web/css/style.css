@@ -22,13 +22,14 @@ a{color:inherit;text-decoration:none}
 .map-container{position:fixed;top:0;left:0;width:100%;height:100%}
 .base-map{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none}
 
-/* Invisible clickable hotspot over each car position */
-.car-hotspot{
-  position:absolute;cursor:pointer;width:6%;height:5%;
+/* Single car.png per space — positioned by %, no full-screen overlays */
+.car-item{
+  position:absolute;cursor:pointer;width:6%;height:4%;
   transform:translate(-50%,-50%);z-index:10;
+  transition:opacity .3s;
 }
-.car-hotspot:hover{background:rgba(0,200,255,.15);border-radius:4px}
-.car-overlay-img{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.car-item img{width:100%;height:100%;display:block}
+.car-item:hover{filter:brightness(1.3)}
 
 /* Pile labels — semi-transparent, positioned above pile */
 .pile-label{

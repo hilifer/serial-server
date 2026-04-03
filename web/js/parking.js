@@ -57,51 +57,37 @@ let parkingData = {};   // {space_id: {status, label}}
 let gunData = {};       // {gun_id: gun_object}
 let pileData = {};      // {pile_id: pile_object}
 
-// ---- Render per-position car overlay images ----
-// Only load images for occupied spaces (saves bandwidth)
-let loadedCarImages = {};
-function renderCarOverlays() {
-  const layer = document.getElementById('carOverlayLayer');
-  if (!layer) return;
+// ---- Single car layer: one small car.png per occupied space ----
+// No full-screen overlay images, no duplication, minimal resources
+let carElements = {}; // reuse DOM elements
 
-  for (let i = 1; i <= 54; i++) {
-    const space = parkingData[i];
-    const occupied = space && space.status === 1;
-    const existing = loadedCarImages[i];
-
-    if (occupied && !existing) {
-      // Create new image only when occupied
-      const img = document.createElement('img');
-      img.src = '/images/car/' + i + '.png';
-      img.className = 'car-overlay-img';
-      img.loading = 'lazy';
-      img.dataset.spaceId = i;
-      layer.appendChild(img);
-      loadedCarImages[i] = img;
-    } else if (occupied && existing) {
-      existing.style.display = 'block';
-    } else if (!occupied && existing) {
-      existing.style.display = 'none';
-    }
-  }
-}
-
-// ---- Render clickable hotspots (invisible, for popup on click) ----
 function renderCars() {
   const layer = document.getElementById('carsLayer');
   if (!layer) return;
-  layer.innerHTML = '';
 
   CAR_POSITIONS.forEach(pos => {
     const space = parkingData[pos.id];
+    const occupied = space && space.status === 1;
+    let el = carElements[pos.id];
 
-    const div = document.createElement('div');
-    div.className = 'car-hotspot';
-    div.style.left = pos.left + '%';
-    div.style.top = pos.top + '%';
-    div.dataset.spaceId = pos.id;
-    div.addEventListener('click', (e) => showCarPopup(e, pos.id, space));
-    layer.appendChild(div);
+    if (!el) {
+      // Create once, reuse
+      el = document.createElement('div');
+      el.className = 'car-item';
+      el.style.left = pos.left + '%';
+      el.style.top = pos.top + '%';
+      const img = document.createElement('img');
+      img.src = '/images/car.png';
+      img.alt = pos.id + '号';
+      el.appendChild(img);
+      el.addEventListener('click', (e) => showCarPopup(e, pos.id, parkingData[pos.id]));
+      layer.appendChild(el);
+      carElements[pos.id] = el;
+    }
+
+    // Toggle visibility
+    el.style.opacity = occupied ? '1' : '0';
+    el.style.pointerEvents = occupied ? 'auto' : 'none';
   });
 }
 
@@ -254,7 +240,6 @@ async function pollParking() {
   if (result && result.spaces) {
     parkingData = {};
     result.spaces.forEach(s => { parkingData[s.space_id] = s; });
-    renderCarOverlays();
     renderCars();
     updateFooter(result);
   }
