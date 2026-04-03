@@ -278,7 +278,6 @@ async function pollPiles() {
 // ---- Init ----
 document.addEventListener('DOMContentLoaded', () => {
   // Initial render with empty state
-  renderCarOverlays();
   renderCars();
   renderPiles();
 
