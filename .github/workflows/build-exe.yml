@@ -10,11 +10,16 @@ on:
       - '.github/workflows/build-exe.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -77,11 +82,10 @@ jobs:
 
       - name: Commit EXE to repo
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          mkdir -p installer/output
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if not exist "installer\output" mkdir "installer\output"
           copy dist\yriot.exe installer\output\yriot.exe
-          git add installer/output/yriot.exe
-          git commit -m "build: yriot.exe Windows executable (auto-built)" || echo "No changes"
-          git push
+          git add -f installer/output/yriot.exe
+          git diff --cached --quiet || (git commit -m "build: yriot.exe Windows executable [skip ci]" && git push)
         shell: cmd
