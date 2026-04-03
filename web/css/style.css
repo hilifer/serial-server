@@ -124,22 +124,22 @@ a{color:inherit;text-decoration:none}
 
 /* Main 3-column — flex, fills remaining space */
 .dash-main{
-  display:flex;gap:clamp(8px,1vw,20px);padding:clamp(8px,1vw,20px);
+  display:flex;gap:clamp(14px,1.5vw,28px);padding:clamp(14px,1.5vw,28px);
   flex:1;min-height:0;position:relative;z-index:5;
 }
-.dash-col{display:flex;flex-direction:column;gap:clamp(6px,.8vh,12px);min-height:0;overflow:hidden}
+.dash-col{display:flex;flex-direction:column;gap:clamp(14px,2vh,24px);min-height:0;overflow-y:auto;overflow-x:hidden}
+.dash-col::-webkit-scrollbar{width:3px}
+.dash-col::-webkit-scrollbar-thumb{background:rgba(0,200,255,.2);border-radius:2px}
 .dash-col:nth-child(1){flex:1}
 .dash-col:nth-child(2){flex:2}
 .dash-col:nth-child(3){flex:1}
-.dash-col>.panel-card{flex:1;min-height:0;display:flex;flex-direction:column}
-/* Right column: solar panel has more content, takes more space */
-.dash-col:nth-child(3)>.panel-card:first-child{flex:3}
-.dash-col:nth-child(3)>.panel-card:last-child{flex:2}
+/* Cards don't stretch — use natural height, scroll if needed */
+.dash-col>.panel-card{flex:0 0 auto;display:flex;flex-direction:column}
 
 /* Panel card */
 .panel-card{
   background:rgba(0,20,60,.8);border:1px solid rgba(0,200,255,.3);
-  border-radius:clamp(8px,1vw,15px);padding:clamp(8px,1.2vh,20px);backdrop-filter:blur(10px);
+  border-radius:clamp(8px,1vw,15px);padding:clamp(14px,2vh,24px);backdrop-filter:blur(10px);
   box-shadow:0 4px 20px rgba(0,0,0,.3);position:relative;overflow:hidden;
 }
 .panel-card::before{
@@ -168,17 +168,17 @@ a{color:inherit;text-decoration:none}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 
 /* Metric grid */
-.metric-grid{display:flex;gap:clamp(4px,.5vw,10px);justify-content:space-between}
+.metric-grid{display:flex;gap:clamp(8px,1vw,16px);justify-content:space-between}
 .metric-grid-bg .metric-item{background:rgba(0,100,200,.15)}
 .metric-item{
-  flex:1;text-align:center;padding:clamp(4px,.6vh,10px) clamp(2px,.3vw,6px);min-width:0;
-  background:rgba(255,107,107,.1);border-radius:6px;border:1px solid rgba(255,107,107,.3);
+  flex:1;text-align:center;padding:clamp(8px,1vh,14px) clamp(4px,.5vw,10px);min-width:0;
+  background:rgba(255,107,107,.1);border-radius:8px;border:1px solid rgba(255,107,107,.3);
 }
 .metric-label{display:block;font-size:clamp(8px,.9vw,10px);color:rgba(255,255,255,.7);margin-bottom:3px;white-space:nowrap}
 .metric-value{display:block;font-size:clamp(11px,1.3vw,14px);font-weight:bold;color:#ff6b6b}
 
 /* Sub section */
-.sub-section h5{color:#4ecdc4;font-size:clamp(10px,1.1vw,14px);margin:clamp(4px,.5vh,10px) 0 clamp(3px,.4vh,8px)}
+.sub-section h5{color:#4ecdc4;font-size:clamp(10px,1.1vw,14px);margin:clamp(10px,1.5vh,18px) 0 clamp(6px,1vh,12px)}
 
 /* Solar hero */
 .solar-hero{display:flex;align-items:center;gap:10px;margin-bottom:clamp(6px,1vh,15px)}
@@ -205,10 +205,11 @@ a{color:inherit;text-decoration:none}
 .vi-label{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.6);margin-bottom:2px}
 .vi-value{font-size:clamp(12px,1.4vw,18px);font-weight:bold;color:#fff}
 
-/* Flow diagram — not too big, leave room for office card */
-.flow-panel{flex:3!important}
+/* Center column: flow panel fills, office card stays compact */
+.dash-col:nth-child(2)>.panel-card{flex:0 0 auto}
+.dash-col:nth-child(2){overflow:hidden}
+.flow-panel{flex:1 1 0!important;min-height:0}
 .flow-panel .card-hdr{margin-bottom:0}
-.office-card{flex:1!important}
 .flow-canvas-wrap{
   width:100%;flex:1;min-height:0;position:relative;overflow:hidden;
   background:rgba(0,0,0,.2);border-radius:clamp(8px,1vw,15px);
