@@ -135,9 +135,14 @@ function renderFlowDiagram(){
   // Storage: V A
   svg+=`<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold"></text>`;
   // Bottom: V/A + kW ABOVE (2 lines each)
-  svg+=`<text id="fDcVA" x="${N.dc.x}" y="${N.dc.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  // 直流充电桩: 2 lines for addr8/addr9 V/A + 1 line combined kW
+  svg+=`<text id="fDc8" x="${N.dc.x}" y="${N.dc.y-RB-(lfs+2)*2-6}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc9" x="${N.dc.x}" y="${N.dc.y-RB-(lfs+2)-6}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAcVA" x="${N.ac.x}" y="${N.ac.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  // 交流充电桩: 3 lines for 3-phase V/A + 1 line kW
+  svg+=`<text id="fAcA" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)*3-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcB" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)*2-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcC" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
@@ -213,16 +218,25 @@ function updateFlowLabels(){
   const sI=real?getVal(allMeterData[5],'current'):sim.storage.i;
   setText('fStor',fmt(sV)+'V '+fmt(sI)+'A');
 
-  // 直流充电桩 (addr 8): V/A + kW
-  const dcV=real?getVal(allMeterData[8],'voltage'):sim.storage.v;
-  const dcI=real?getVal(allMeterData[8],'current'):0;
-  setText('fDcVA',fmt(dcV)+'V '+fmt(Math.abs(dcI))+'A');
-  setText('fDc',flowPower.dc?fmt(flowPower.dc)+'kW':'--kW');
+  // 直流充电桩 (addr 8+9): each shows V/A, combined kW
+  const dc8V=real?getVal(allMeterData[8],'voltage'):sim.storage.v;
+  const dc8I=real?getVal(allMeterData[8],'current'):0;
+  const dc9V=real?getVal(allMeterData[9],'voltage'):sim.storage.v;
+  const dc9I=real?getVal(allMeterData[9],'current'):0;
+  setText('fDc8','桩1:'+fmt(dc8V)+'V '+fmt(Math.abs(dc8I))+'A');
+  setText('fDc9','桩2:'+fmt(dc9V)+'V '+fmt(Math.abs(dc9I))+'A');
+  setText('fDc','合计:'+fmt(flowPower.dc)+'kW');
 
-  // 交流充电桩 (addr 3): V/A + kW
-  const acV=real?getVal(allMeterData[3],'voltage_a'):sim.grid.v;
-  const acI=real?getVal(allMeterData[3],'current_a'):0;
-  setText('fAcVA',fmt(acV)+'V '+fmt(Math.abs(acI))+'A');
+  // 交流充电桩 (addr 3, ADL400): 3-phase V/A + kW
+  const acVa=real?getVal(allMeterData[3],'voltage_a'):sim.grid.v;
+  const acVb=real?getVal(allMeterData[3],'voltage_b'):sim.grid.v;
+  const acVc=real?getVal(allMeterData[3],'voltage_c'):sim.grid.v;
+  const acIa=real?getVal(allMeterData[3],'current_a'):0;
+  const acIb=real?getVal(allMeterData[3],'current_b'):0;
+  const acIc=real?getVal(allMeterData[3],'current_c'):0;
+  setText('fAcA',fmt(acVa)+'V '+fmt(Math.abs(acIa))+'A');
+  setText('fAcB',fmt(acVb)+'V '+fmt(Math.abs(acIb))+'A');
+  setText('fAcC',fmt(acVc)+'V '+fmt(Math.abs(acIc))+'A');
   setText('fAc',flowPower.ac?fmt(flowPower.ac)+'kW':'--kW');
 
   // 办公室 (addr 4): V/A + kW
