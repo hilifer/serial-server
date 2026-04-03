@@ -132,6 +132,9 @@ a{color:inherit;text-decoration:none}
 .dash-col:nth-child(2){flex:2}
 .dash-col:nth-child(3){flex:1}
 .dash-col>.panel-card{flex:1;min-height:0;display:flex;flex-direction:column}
+/* Right column: solar panel has more content, takes more space */
+.dash-col:nth-child(3)>.panel-card:first-child{flex:3}
+.dash-col:nth-child(3)>.panel-card:last-child{flex:2}
 
 /* Panel card */
 .panel-card{
