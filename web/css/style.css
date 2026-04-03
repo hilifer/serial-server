@@ -36,21 +36,27 @@ a { color:inherit; text-decoration:none; }
 .car-item:hover { filter: brightness(1.3); }
 .car-overlay-img { position: fixed; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
 
-.pile-label { position: fixed; z-index: 20; font-size: 12px; pointer-events: none; }
+/* Pile labels — semi-transparent, above pile position, not covering cars */
+.pile-label {
+  position: fixed; z-index: 20; font-size: 12px; pointer-events: none;
+  transform: translate(-50%, -100%); /* anchor at bottom-center, display above */
+  margin-top: -8px;
+}
 .pile-bubble {
-  padding: 8px; border-radius: 6px; font-size: 12px; text-align: center;
-  position: relative; white-space: nowrap; min-width: 80px;
+  padding: 6px 10px; border-radius: 6px; font-size: 12px; text-align: center;
+  position: relative; white-space: nowrap; min-width: 70px;
+  backdrop-filter: blur(4px);
 }
 .pile-label::after {
-  content: ''; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
-  border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid blue;
+  content: ''; position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%);
+  border-left: 6px solid transparent; border-right: 6px solid transparent;
 }
-.pile-bubble.free { background: blue; color: yellow; }
-.pile-label.free::after { border-top-color: blue; }
-.pile-bubble.busy { background: #555; color: #8b8b53; }
-.pile-label.busy::after { border-top-color: #555; }
-.pile-title { font-size: 25px; font-weight: bold; text-align: center; }
-.pile-info-line { font-size: 11px; line-height: 1.4; }
+.pile-bubble.free { background: rgba(0,0,255,0.65); color: yellow; }
+.pile-label.free::after { border-top: 8px solid rgba(0,0,255,0.65); }
+.pile-bubble.busy { background: rgba(85,85,85,0.65); color: #bbb; }
+.pile-label.busy::after { border-top: 8px solid rgba(85,85,85,0.65); }
+.pile-title { font-size: 20px; font-weight: bold; text-align: center; }
+.pile-info-line { font-size: 10px; line-height: 1.3; }
 
 .footer {
   height: 150px; position: fixed; bottom: 0; left: 20%; width: 60vw; z-index: 999;

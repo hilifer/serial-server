@@ -217,25 +217,40 @@ function updateFlowLabels() {
   flowPower.storage = sP; flowPower.dc = dcP; flowPower.ac = acP; flowPower.office = oP;
   updateEdgeStyles();
 
-  // Labels — format matches test2.vue templates exactly
-  const gI = real ? getVal(allMeterData[1],'current_a') : 10;
-  setText('fG1', fmt(gP)+'V '+fmt(gI,0)+'A');
-  setText('fG2', fmt(gP)+'V '+fmt(gI,0)+'A');
-  setText('fG3', fmt(gP)+'V '+fmt(gI,0)+'A');
+  // Labels — use correct meter fields (voltage, not power!)
+  // 电网 (addr 1, ADL400): 3-phase voltage + current
+  const gVa = real ? getVal(allMeterData[1],'voltage_a') : 380;
+  const gVb = real ? getVal(allMeterData[1],'voltage_b') : 380;
+  const gVc = real ? getVal(allMeterData[1],'voltage_c') : 380;
+  const gIa = real ? getVal(allMeterData[1],'current_a') : 10;
+  const gIb = real ? getVal(allMeterData[1],'current_b') : 10;
+  const gIc = real ? getVal(allMeterData[1],'current_c') : 10;
+  setText('fG1', fmt(gVa)+'V '+fmt(gIa)+'A');
+  setText('fG2', fmt(gVb)+'V '+fmt(gIb)+'A');
+  setText('fG3', fmt(gVc)+'V '+fmt(gIc)+'A');
 
+  // 光伏1/2 (addr 10/11, DJSF): voltage + current
+  const pv1V = real ? getVal(allMeterData[10],'voltage') : sim.solar.voltage;
   const pv1I = real ? getVal(allMeterData[10],'current') : 10;
+  const pv2V = real ? getVal(allMeterData[11],'voltage') : sim.solar.voltage;
   const pv2I = real ? getVal(allMeterData[11],'current') : 10;
-  setText('fPv1', fmt(pv1P,0)+'V '+fmt(pv1I,0)+'A');
-  setText('fPv2', fmt(pv2P,0)+'V '+fmt(pv2I,0)+'A');
+  setText('fPv1', fmt(pv1V,0)+'V '+fmt(Math.abs(pv1I))+'A');
+  setText('fPv2', fmt(pv2V,0)+'V '+fmt(Math.abs(pv2I))+'A');
 
-  setText('fStor', fmt(sP)+'V '+fmt(sI)+'A');
+  // 储能 (addr 5, DJSF): voltage + current (show sign for charge/discharge)
+  const sV = real ? getVal(allMeterData[5],'voltage') : sim.storage.voltage;
+  const sIval = real ? getVal(allMeterData[5],'current') : sim.storage.current;
+  setText('fStor', fmt(sV)+'V '+fmt(sIval)+'A');
 
   setText('fDc',  fmt(dcP)+'kW');
   setText('fAc',  fmt(acP)+'kW');
   setText('fOff', fmt(oP)+'kW');
 
-  // Right panel solar
+  // Right panel solar — PV power is negative (generating), show absolute
   setText('solarPowerBig', fmt(Math.abs(pv1P||0)+Math.abs(pv2P||0)));
+  // Also update flow power — use absolute for animation direction
+  flowPower.pv1 = Math.abs(pv1P||0);
+  flowPower.pv2 = Math.abs(pv2P||0);
   // PV1 voltage/current
   const pv1VVal = real ? getVal(allMeterData[10],'voltage') : sim.solar.voltage;
   const pv1IVal = real ? Math.abs(getVal(allMeterData[10],'current')||0) : sim.solar.current;
@@ -252,21 +267,63 @@ function updateFlowLabels() {
 
 function updateEnergyCards(real, gP) {
   if (real) {
-    const gF=getVal(allMeterData[1],'energy_forward_total'), gR=getVal(allMeterData[1],'energy_reverse_total');
-    setText('gridMonthE',fmt(gF,1)); setText('gridYearE',fmt(gF,1)); setText('gridTotalE',fmt(gF?(gF+(gR||0)):null,1));
-    const lF=getVal(allMeterData[4],'energy_forward_total');
-    setText('loadMonthE',fmt(lF,1)); setText('loadYearE',fmt(lF,1)); setText('loadTotalE',fmt(lF,1));
-    setText('officeMonthE',fmt(lF,1)); setText('officeYearE',fmt(lF,1)); setText('officeTotalE',fmt(lF,1));
-    const d8=getVal(allMeterData[8],'energy_forward_total')||0, d9=getVal(allMeterData[9],'energy_forward_total')||0;
-    setText('dcMonthE',fmt(d8+d9,1)); setText('dcYearE',fmt(d8+d9,1)); setText('dcTotalE',fmt(d8+d9,1));
-    const aF=getVal(allMeterData[3],'energy_forward_total');
-    setText('acMonthE',fmt(aF,1)); setText('acYearE',fmt(aF,1)); setText('acTotalE',fmt(aF,1));
-    const p1=getVal(allMeterData[10],'energy_forward_total'), p2=getVal(allMeterData[11],'energy_forward_total');
-    setText('pv1MonthE',fmt(p1,1)); setText('pv1YearE',fmt(p1,1)); setText('pv1TotalE',fmt(p1,1));
-    setText('pv2MonthE',fmt(p2,1)); setText('pv2YearE',fmt(p2,1)); setText('pv2TotalE',fmt(p2,1));
-    const bF=getVal(allMeterData[6],'energy_forward_total'), bR=getVal(allMeterData[6],'energy_reverse_total');
-    setText('batChargeMonth',fmt(bF,1)); setText('batChargeYear',fmt(bF,1)); setText('batChargeTotal',fmt(bF,1));
-    setText('batDischargeMonth',fmt(bR,1)); setText('batDischargeYear',fmt(bR,1)); setText('batDischargeTotal',fmt(bR,1));
+    // ---- 电网购电量 (addr 1, ADL400) ----
+    // 总=组合有功总, 月/年=正向总(因为没有月冻结)
+    const gridFwd = getVal(allMeterData[1],'energy_forward_total');
+    const gridRev = getVal(allMeterData[1],'energy_reverse_total');
+    const gridComb = getVal(allMeterData[1],'energy_combined_total');
+    setText('gridMonthE', fmt(gridFwd,1));
+    setText('gridYearE',  fmt(gridFwd,1));
+    setText('gridTotalE', fmt(gridComb,1));
+
+    // ---- 负载耗电量 (addr 4, ADL400) ----
+    const loadFwd = getVal(allMeterData[4],'energy_forward_total');
+    const loadComb = getVal(allMeterData[4],'energy_combined_total');
+    setText('loadMonthE', fmt(loadFwd,1));
+    setText('loadYearE',  fmt(loadFwd,1));
+    setText('loadTotalE', fmt(loadComb || loadFwd,1));
+
+    // ---- 直流桩耗电量 (addr 8+9, DJSF) ----
+    const dc8 = getVal(allMeterData[8],'energy_forward_total') || 0;
+    const dc9 = getVal(allMeterData[9],'energy_forward_total') || 0;
+    setText('dcMonthE', fmt(dc8+dc9,1));
+    setText('dcYearE',  fmt(dc8+dc9,1));
+    setText('dcTotalE', fmt(dc8+dc9,1));
+
+    // ---- 交流桩耗电量 (addr 3, ADL400) ----
+    const acFwd = getVal(allMeterData[3],'energy_forward_total');
+    const acComb = getVal(allMeterData[3],'energy_combined_total');
+    setText('acMonthE', fmt(acFwd,1));
+    setText('acYearE',  fmt(acFwd,1));
+    setText('acTotalE', fmt(acComb || acFwd,1));
+
+    // ---- 办公室耗电量 (addr 4, same as load) ----
+    setText('officeMonthE', fmt(loadFwd,1));
+    setText('officeYearE',  fmt(loadFwd,1));
+    setText('officeTotalE', fmt(loadComb || loadFwd,1));
+
+    // ---- 光伏1 (addr 10, DJSF) — 发电量在反向电能 ----
+    const pv1Rev = getVal(allMeterData[10],'energy_reverse_total');
+    const pv1Fwd = getVal(allMeterData[10],'energy_forward_total');
+    setText('pv1MonthE', fmt(pv1Rev,1));
+    setText('pv1YearE',  fmt(pv1Rev,1));
+    setText('pv1TotalE', fmt(pv1Rev,1));
+
+    // ---- 光伏2 (addr 11, DJSF) — 发电量在反向电能 ----
+    const pv2Rev = getVal(allMeterData[11],'energy_reverse_total');
+    setText('pv2MonthE', fmt(pv2Rev,1));
+    setText('pv2YearE',  fmt(pv2Rev,1));
+    setText('pv2TotalE', fmt(pv2Rev,1));
+
+    // ---- 储能 (addr 6, DJSF) ----
+    const batFwd = getVal(allMeterData[6],'energy_forward_total');  // 充电
+    const batRev = getVal(allMeterData[6],'energy_reverse_total');  // 放电
+    setText('batChargeMonth', fmt(batFwd,1));
+    setText('batChargeYear',  fmt(batFwd,1));
+    setText('batChargeTotal', fmt(batFwd,1));
+    setText('batDischargeMonth', fmt(batRev,1));
+    setText('batDischargeYear',  fmt(batRev,1));
+    setText('batDischargeTotal', fmt(batRev,1));
   } else {
     const sp=sim.solar.power, op=sim.office.power, cp=sim.charging.power, stp=Math.abs(sim.storage.power);
     const net=+(gP+op+cp+stp).toFixed(1);
