@@ -50,9 +50,9 @@ const PILE_POSITIONS = [
   {id:2,  left:82.77, top:42.92}, {id:3,  left:84.34, top:59.03},
 ];
 
-// Pile type by pile ID: 2号,3号 are DC 120kW, rest are AC 7kW
+// Pile type by display ID: 17号,18号 are DC 120kW (physical pos 1,2), rest AC 7kW
 function getPileTypeById(pileId) {
-  return (pileId === 2 || pileId === 3) ? {type:'直流', power:'120kW'} : {type:'交流', power:'7kW'};
+  return (pileId === 17 || pileId === 18) ? {type:'直流', power:'120kW'} : {type:'交流', power:'7kW'};
 }
 
 // State
@@ -267,14 +267,21 @@ async function pollPiles() {
   const result = await getChargingPiles();
   if (result && result.result) {
     pileData = {};
-    // Build pile ID -> display index mapping
-    // Sort by known IDs order (matching lizi's ids array)
-    const knownIds = [2312,2240,2241,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
+    // Odoo pile IDs in physical position order (left-top to right-bottom)
+    // from lizi source: ids=[2312,2240,2241,2313,...,2325,2326,2327]
+    const positionIds = [2312,2240,2241,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
+    // New display numbers per position (right-to-left, top-to-bottom):
+    // position 0(左上)=16, 1=17, 2=18, 3=13, 4=14, 5=15, 6=10, 7=11, 8=12,
+    // 9=7, 10=8, 11=9, 12=4, 13=5, 14=6, 15=1, 16=2, 17=3
+    const posToDisplay = [16,17,18, 13,14,15, 10,11,12, 7,8,9, 4,5,6, 1,2,3];
+
     pileIdToIndex = {};
     result.result.forEach(p => { pileData[p.id] = p; });
-    knownIds.forEach((id, idx) => { pileIdToIndex[id] = idx + 1; });
-    // Also map any unknown piles by position
-    let nextIdx = knownIds.length + 1;
+    positionIds.forEach((id, posIdx) => {
+      pileIdToIndex[id] = posToDisplay[posIdx];
+    });
+    // Map any unknown piles
+    let nextIdx = 19;
     result.result.forEach(p => {
       if (!(p.id in pileIdToIndex)) { pileIdToIndex[p.id] = nextIdx++; }
     });
