@@ -17,7 +17,11 @@ import time
 import logging
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None  # Not needed when config is hardcoded
+
 import paho.mqtt.client as mqtt
 
 from serial_manager import SerialManager, create_serial_manager
@@ -37,7 +41,7 @@ def load_config(path: str = "config.yaml") -> dict:
     config_path = _get_base_dir() / path
     if not config_path.exists():
         config_path = Path(sys.executable).parent / path  # next to .exe
-    if config_path.exists():
+    if config_path.exists() and yaml:
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
@@ -324,4 +328,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("\n" + "=" * 50)
+        print(f"  启动失败: {e}")
+        print("=" * 50)
+        import traceback
+        traceback.print_exc()
+        input("\n按回车键退出...")
+        sys.exit(1)
