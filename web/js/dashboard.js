@@ -106,8 +106,10 @@ function renderFlowDiagram(){
   // Nodes
   const fs=Math.max(10,Math.min(R*.55,22)); // icon font size
   Object.entries(N).forEach(([k,n])=>{
-    const addr={pv1:10,pv2:11,grid:1,storage:5,dc:8,ac:3,office:4}[k]||'';
-    svg+=`<g class="flow-node-group" data-addr="${addr}" style="--node-color:${n.bc};cursor:pointer">`;
+    const addrMap={pv1:10,pv2:11,grid:1,storage:5,dc:8,ac:3,office:4};
+    const addr=addrMap[k];
+    const clickStyle=addr?'cursor:pointer':'';
+    svg+=`<g class="flow-node-group"${addr?' data-addr="'+addr+'"':''} style="--node-color:${n.bc};${clickStyle}">`;
     if(n.isRect){
       // SQUARE center node
       svg+=`<rect x="${n.x-RW}" y="${n.y-RH}" width="${RW*2}" height="${RH*2}" rx="6" fill="rgba(0,20,60,.9)" stroke="${n.bc}" stroke-width="2"/>`;
@@ -146,7 +148,7 @@ function renderFlowDiagram(){
   // Click handlers
   wrap.querySelectorAll('[data-addr]').forEach(g=>{
     const a=g.getAttribute('data-addr');
-    if(a)g.addEventListener('click',()=>location.href='/meter.html?addr='+a);
+    if(a&&a!=='undefined'&&a!=='')g.addEventListener('click',()=>location.href='/meter.html?addr='+a);
   });
 }
 

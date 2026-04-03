@@ -6,11 +6,11 @@
 <title>电表详情</title>
 <link rel="stylesheet" href="/css/style.css">
 <style>
-body { background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0f3460 100%); }
+body { background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0f3460 100%); overflow:hidden; }
 .detail-page { width:100vw; height:100vh; display:flex; flex-direction:column; font-family:'Microsoft YaHei',sans-serif; color:#fff; }
 
 .detail-header {
-  height:60px; display:flex; align-items:center; justify-content:space-between; padding:0 30px;
+  height:clamp(44px,6vh,60px); flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 clamp(15px,2vw,30px);
   background:linear-gradient(90deg, rgba(0,150,255,0.1), rgba(0,200,255,0.2), rgba(0,150,255,0.1));
   border-bottom:2px solid rgba(0,200,255,0.3);
 }
@@ -18,22 +18,24 @@ body { background: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #0f3460 100%
 .detail-header .title { font-size:22px; font-weight:bold; color:#00d4ff; }
 .detail-header .time { font-size:14px; color:rgba(255,255,255,0.7); }
 
-.detail-body { flex:1; display:flex; gap:20px; padding:20px; min-height:0; }
+.detail-body { flex:1; display:flex; gap:clamp(10px,1.5vw,20px); padding:clamp(10px,1.5vw,20px); min-height:0; overflow:hidden; }
 
 /* Left: big gauge area */
 .gauge-panel {
   flex:1; background:rgba(0,20,60,0.8); border:1px solid rgba(0,200,255,0.3);
   border-radius:15px; padding:30px; display:flex; flex-direction:column; align-items:center; justify-content:center;
 }
-.gauge-icon { font-size:80px; margin-bottom:20px; }
-.gauge-power { font-size:64px; font-weight:bold; color:#00d4ff; }
-.gauge-unit { font-size:20px; color:rgba(255,255,255,0.6); margin-left:8px; }
+.gauge-icon { font-size:clamp(48px,8vw,80px); margin-bottom:clamp(10px,2vh,20px); }
+.gauge-power { font-size:clamp(36px,6vw,64px); font-weight:bold; color:#00d4ff; }
+.gauge-unit { font-size:clamp(14px,2vw,20px); color:rgba(255,255,255,0.6); margin-left:8px; }
 .gauge-status { margin-top:15px; padding:6px 20px; border-radius:20px; font-size:14px; font-weight:bold; }
 .gauge-status.online { background:rgba(0,255,136,0.2); color:#00ff88; border:1px solid rgba(0,255,136,0.4); }
 .gauge-status.offline { background:rgba(255,100,100,0.2); color:#ff6b6b; border:1px solid rgba(255,100,100,0.4); }
 
 /* Right: data cards */
-.data-panel { flex:1.2; display:flex; flex-direction:column; gap:15px; overflow-y:auto; }
+.data-panel { flex:1.2; display:flex; flex-direction:column; gap:clamp(8px,1vh,15px); overflow-y:auto; }
+.data-panel::-webkit-scrollbar{width:4px}
+.data-panel::-webkit-scrollbar-thumb{background:rgba(0,200,255,.3);border-radius:2px}
 .data-card {
   background:rgba(0,20,60,0.8); border:1px solid rgba(0,200,255,0.3);
   border-radius:12px; padding:18px; position:relative; overflow:hidden;
