@@ -168,8 +168,8 @@ function getGunLinesForPile(pileIndex) {
       const idx = pileIdToIndex[gun.pile_id[0]];
       if (idx === pileIndex) {
         const gunNum = gun.gun_number || '?';
-        const statusText = statusMap[gun.status] || '未知';
-        lines.push(gunNum + '枪 ' + statusText);
+        const gunLabel = {'01':'A','02':'B','1':'A','2':'B'}[gunNum] || gunNum;
+        lines.push(gunLabel + '枪 ' + statusText);
         // Determine type from pile data
         const pile = pileData[gun.pile_id[0]];
         if (pile) {
