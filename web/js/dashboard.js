@@ -100,13 +100,12 @@ function renderFlowDiagram(){
     const cls=isDash?edgeClass('flow-edge dashed '+e.type,flowPower[e.pk]):edgeClass('flow-edge '+e.type,flowPower[e.pk]);
     svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
   });
-  // Bidirectional indicator on storage line
-  svg+=`<path d="${storagePath()}" class="flow-edge storage animated reverse" opacity="0.3"/>`;
-
+  // Storage line: single line, direction changes dynamically via edgeClass
+  // No fixed bidirectional overlay — direction determined by power sign
   // Nodes
   const fs=Math.max(10,Math.min(R*.55,22)); // icon font size
   Object.entries(N).forEach(([k,n])=>{
-    const addrMap={pv1:10,pv2:11,grid:1,storage:5,dc:8,ac:3,office:4};
+    const addrMap={pv1:10,pv2:11,grid:1,storage:6,dc:8,ac:3,office:4};
     const addr=addrMap[k];
     const clickStyle=addr?'cursor:pointer':'';
     svg+=`<g class="flow-node-group"${addr?' data-addr="'+addr+'"':''} style="--node-color:${n.bc};${clickStyle}">`;
@@ -122,30 +121,34 @@ function renderFlowDiagram(){
     svg+=`</g>`;
   });
 
-  // Power labels: top nodes BELOW, bottom nodes ABOVE
-  // 电网: 3 lines (V A per phase)
-  const lg=Math.max(10,R*.3);
-  const lfs=Math.max(8,Math.min(11,R*.25));
+  // Power labels — positioned to avoid overlapping connection lines
+  const lg=Math.max(8,R*.25);
+  const lfs=Math.max(7,Math.min(10,R*.22));
+  const lsp=lfs+1; // line spacing
+  // 电网: 3 lines, left-aligned to avoid center vertical line
   svg+=`<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+lfs+2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+(lfs+2)*2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  // PV1/2: V A
-  svg+=`<text id="fPv1" x="${N.pv1.x}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fPv2" x="${N.pv2.x}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold"></text>`;
-  // Storage: V A
+  svg+=`<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
+  // PV1: shift left to avoid vertical line going down to center
+  svg+=`<text id="fPv1" x="${N.pv1.x-R*.6}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold"></text>`;
+  // PV2: shift right
+  svg+=`<text id="fPv2" x="${N.pv2.x+R*.6}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold"></text>`;
+  // Storage: shift right to avoid horizontal line going left to center
   svg+=`<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold"></text>`;
-  // Bottom: V/A + kW ABOVE (2 lines each)
-  // 直流充电桩: 2 lines for addr8/addr9 V/A + 1 line combined kW
-  svg+=`<text id="fDc8" x="${N.dc.x}" y="${N.dc.y-RB-(lfs+2)*2-6}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fDc9" x="${N.dc.x}" y="${N.dc.y-RB-(lfs+2)-6}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  // 交流充电桩: 3 lines for 3-phase V/A + 1 line kW
-  svg+=`<text id="fAcA" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)*3-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAcB" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)*2-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAcC" x="${N.ac.x}" y="${N.ac.y-RB-(lfs+2)-6}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-lfs-10}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-4}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  // Bottom nodes: labels ABOVE, shifted left to avoid vertical junction line
+  // 直流充电桩
+  svg+=`<text id="fDc8" x="${N.dc.x}" y="${N.dc.y-RB-lsp*2-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc9" x="${N.dc.x}" y="${N.dc.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  // 交流充电桩: shifted left of center line
+  const acLx=N.ac.x-R*1.2;
+  svg+=`<text id="fAcA" x="${acLx}" y="${N.ac.y-RB-lsp*3-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcB" x="${acLx}" y="${N.ac.y-RB-lsp*2-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcC" x="${acLx}" y="${N.ac.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAc" x="${acLx}" y="${N.ac.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  // 办公室
+  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
 
   svg+='</svg>';
   wrap.innerHTML=svg;
@@ -182,7 +185,7 @@ function updateFlowLabels(){
   if(real){
     gP=getVal(allMeterData[1],'power_total');
     pv1P=getVal(allMeterData[10],'power');pv2P=getVal(allMeterData[11],'power');
-    sP=getVal(allMeterData[5],'power');
+    sP=getVal(allMeterData[6],'power'); // addr 6 = 电池柜
     const dcP8=getVal(allMeterData[8],'power')||0,dcP9=getVal(allMeterData[9],'power')||0;
     flowPower.dc=Math.abs(dcP8)+Math.abs(dcP9);
     flowPower.ac=Math.abs(getVal(allMeterData[3],'power_total')||0);
@@ -214,8 +217,8 @@ function updateFlowLabels(){
   setText('fPv1',fmt(pv1V,0)+'V '+fmt(Math.abs(pv1I))+'A');
   setText('fPv2',fmt(pv2V,0)+'V '+fmt(Math.abs(pv2I))+'A');
 
-  const sV=real?getVal(allMeterData[5],'voltage'):sim.storage.v;
-  const sI=real?getVal(allMeterData[5],'current'):sim.storage.i;
+  const sV=real?getVal(allMeterData[6],'voltage'):sim.storage.v; // addr 6 = 电池柜
+  const sI=real?getVal(allMeterData[6],'current'):sim.storage.i;
   setText('fStor',fmt(sV)+'V '+fmt(sI)+'A');
 
   // 直流充电桩 (addr 8+9): each shows V/A, combined kW
