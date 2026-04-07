@@ -121,34 +121,33 @@ function renderFlowDiagram(){
     svg+=`</g>`;
   });
 
-  // Power labels — positioned to avoid overlapping connection lines
-  const lg=Math.max(8,R*.25);
+  // Power labels — all centered below/above nodes, extra gap to clear lines
+  const lg=Math.max(14,R*.4); // bigger gap below top nodes to clear lines
   const lfs=Math.max(7,Math.min(10,R*.22));
-  const lsp=lfs+1; // line spacing
-  // 电网: 3 lines, left-aligned to avoid center vertical line
+  const lsp=lfs+2;
+  // 电网: 3 lines
   svg+=`<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
   svg+=`<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold"></text>`;
-  // PV1: shift left to avoid vertical line going down to center
-  svg+=`<text id="fPv1" x="${N.pv1.x-R*.6}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold"></text>`;
-  // PV2: shift right
-  svg+=`<text id="fPv2" x="${N.pv2.x+R*.6}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold"></text>`;
-  // Storage: shift right to avoid horizontal line going left to center
+  // PV1, PV2: centered below
+  svg+=`<text id="fPv1" x="${N.pv1.x}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fPv2" x="${N.pv2.x}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold"></text>`;
+  // Storage: centered below
   svg+=`<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold"></text>`;
-  // Bottom nodes: labels ABOVE, shifted left to avoid vertical junction line
+  // Bottom nodes: centered above, extra gap
+  const blg=Math.max(12,RB*.3); // gap above bottom nodes
   // 直流充电桩
-  svg+=`<text id="fDc8" x="${N.dc.x}" y="${N.dc.y-RB-lsp*2-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fDc9" x="${N.dc.x}" y="${N.dc.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
-  // 交流充电桩: shifted left of center line
-  const acLx=N.ac.x-R*1.2;
-  svg+=`<text id="fAcA" x="${acLx}" y="${N.ac.y-RB-lsp*3-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAcB" x="${acLx}" y="${N.ac.y-RB-lsp*2-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAcC" x="${acLx}" y="${N.ac.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fAc" x="${acLx}" y="${N.ac.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc8" x="${N.dc.x}" y="${N.dc.y-RB-blg-lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc9" x="${N.dc.x}" y="${N.dc.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fDc" x="${N.dc.x}" y="${N.dc.y-RB-blg}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold"></text>`;
+  // 交流充电桩
+  svg+=`<text id="fAcA" x="${N.ac.x}" y="${N.ac.y-RB-blg-lsp*3}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcB" x="${N.ac.x}" y="${N.ac.y-RB-blg-lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAcC" x="${N.ac.x}" y="${N.ac.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fAc" x="${N.ac.x}" y="${N.ac.y-RB-blg}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold"></text>`;
   // 办公室
-  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-lsp-4}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
-  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-2}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
+  svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-blg}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold"></text>`;
 
   svg+='</svg>';
   wrap.innerHTML=svg;
