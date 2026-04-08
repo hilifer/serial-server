@@ -303,9 +303,8 @@ def main():
     # 3. Import and start Flask API (blocking)
     from meter_api import app
 
-    def _signal_handler(sig, frame):
-        logger.info("Shutting down...")
-        # Close everything with timeout — don't let locks block exit
+    def _shutdown():
+        """Clean shutdown — close serial ports and MQTT."""
         try:
             mqtt_server.stop()
         except Exception:
@@ -313,26 +312,30 @@ def main():
         for name, mgr in serial_managers.items():
             try:
                 mgr.close()
-                logger.info("[%s] closed", name)
             except Exception:
                 pass
-        # Force exit after cleanup (kills any stuck threads)
+
+    def _signal_handler(sig, frame):
+        logger.info("Shutting down...")
+        _shutdown()
         os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    # Windows: handle console close (X button)
+    # Windows: handle Ctrl+C and window X close
     if sys.platform == 'win32':
+        import atexit
+        atexit.register(_shutdown)
         try:
             import ctypes
-            kernel32 = ctypes.windll.kernel32
-            def _console_handler(event):
-                if event in (0, 2):  # CTRL_C=0, CTRL_CLOSE=2
-                    _signal_handler(None, None)
-                    return True
-                return False
             HANDLER_FUNC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
+            def _console_handler(event):
+                # 0=CTRL_C, 2=CTRL_CLOSE, 5=CTRL_LOGOFF, 6=CTRL_SHUTDOWN
+                _shutdown()
+                os._exit(0)
+                return True
+            kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleCtrlHandler(HANDLER_FUNC(_console_handler), True)
         except Exception:
             pass
