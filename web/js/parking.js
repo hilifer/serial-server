@@ -83,7 +83,6 @@ function renderCars() {
       img.src = '/images/car.png';
       img.alt = pos.id + '号';
       el.appendChild(img);
-      el.addEventListener('click', (e) => showCarPopup(e, pos.id, parkingData[pos.id]));
       layer.appendChild(el);
       carElements[pos.id] = el;
     }
@@ -191,39 +190,6 @@ function getGunLinesForPile(pileIndex) {
   return lines;
 }
 
-// ---- Popup for car ----
-function showCarPopup(event, spaceId, space) {
-  hidePopup();
-  const popup = document.getElementById('popup');
-  const content = document.getElementById('popupContent');
-  const occupied = space && space.status === 1;
-  const statusClass = occupied ? 'occupied' : 'empty';
-  const statusText = occupied ? '占用' : '空闲';
-
-  content.innerHTML = `
-    <span class="close-btn" onclick="hidePopup()">&times;</span>
-    <div class="popup-title">${spaceId}号车位</div>
-    <div class="popup-row">
-      <span class="lbl">车位状态：</span>
-      <span class="status-tag ${statusClass}">${statusText}</span>
-    </div>
-  `;
-
-  popup.style.display = 'block';
-  positionPopup(popup, event);
-}
-
-function positionPopup(popup, event) {
-  const x = event.clientX + 15;
-  const y = event.clientY - 10;
-  popup.style.left = Math.min(x, window.innerWidth - 250) + 'px';
-  popup.style.top = Math.min(y, window.innerHeight - 200) + 'px';
-}
-
-function hidePopup() {
-  const popup = document.getElementById('popup');
-  if (popup) popup.style.display = 'none';
-}
 
 // ---- Update footer stats ----
 function updateFooter(parkResult) {
@@ -299,12 +265,4 @@ document.addEventListener('DOMContentLoaded', () => {
   startPolling(pollGuns, 30000);    // 30秒读一次充电枪
   pollPiles();
 
-  // Close popup on outside click
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.car-item') &&
-        !e.target.closest('.pile-label') &&
-        !e.target.closest('.popup')) {
-      hidePopup();
-    }
-  });
 });
