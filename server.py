@@ -305,10 +305,19 @@ def main():
 
     def _signal_handler(sig, frame):
         logger.info("Shutting down...")
-        mqtt_server.stop()
-        for mgr in serial_managers.values():
-            mgr.close()
-        os._exit(0)  # Force exit all threads immediately
+        # Close everything with timeout — don't let locks block exit
+        try:
+            mqtt_server.stop()
+        except Exception:
+            pass
+        for name, mgr in serial_managers.items():
+            try:
+                mgr.close()
+                logger.info("[%s] closed", name)
+            except Exception:
+                pass
+        # Force exit after cleanup (kills any stuck threads)
+        os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)

@@ -118,8 +118,11 @@ class SerialManager:
                 return False
 
     def close(self):
-        with self._lock:
-            self._stop_reconnect()
+        # Stop reconnect thread first (no lock needed)
+        self._stop_reconnect()
+        # Try to acquire lock with timeout to avoid deadlock on exit
+        acquired = self._lock.acquire(timeout=2)
+        try:
             if self._serial and self._serial.is_open:
                 try:
                     self._serial.close()
@@ -128,6 +131,9 @@ class SerialManager:
                 logger.info("[%s] Serial port closed", self.port)
             self._serial = None
             self._status = PortStatus.DISCONNECTED
+        finally:
+            if acquired:
+                self._lock.release()
 
     def _handle_error(self, operation: str, error: Exception):
         """Handle a serial error: close port, set status, log."""
