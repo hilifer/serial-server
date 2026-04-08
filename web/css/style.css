@@ -240,11 +240,8 @@ a{color:inherit;text-decoration:none}
 .flow-edge.fast{animation-duration:.4s}
 .flow-edge.slow{animation-duration:1.5s}
 .flow-edge.idle{animation:none;stroke:#2a4a6a;stroke-dasharray:5 5;opacity:.5}
-.flow-edge.solar{stroke:#ff9500}
-.flow-edge.storage{stroke:#00cccc}
-.flow-edge.grid-line{stroke:#3b82f6}
-.flow-edge.charge{stroke:#ff6600}
-.flow-edge.office-line{stroke:#4ecdc4}
+/* All flow lines use same blue color */
+.flow-edge.solar,.flow-edge.storage,.flow-edge.grid-line,.flow-edge.charge,.flow-edge.office-line{stroke:#3b82f6}
 
 /* Flowing lights */
 .flowing-lights{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
