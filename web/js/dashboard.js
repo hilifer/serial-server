@@ -83,10 +83,10 @@ function renderFlowDiagram(){
   }
 
   const edges=[
-    {id:'eGrid',path:gridPath(),type:'grid-line',pk:'grid'},
+    {id:'eGrid',path:gridPath(),type:'grid-line',pk:'grid',bidir:true},
     {id:'ePv1',path:pvPath(N.pv1),type:'solar',pk:'pv1'},
     {id:'ePv2',path:pvPath(N.pv2),type:'solar',pk:'pv2'},
-    {id:'eStor',path:storagePath(),type:'storage',pk:'storage'},
+    {id:'eStor',path:storagePath(),type:'storage',pk:'storage',bidir:true},
     {id:'eDc',path:botPath(N.dc),type:'charge',pk:'dc'},
     {id:'eAc',path:botPath(N.ac),type:'charge',pk:'ac'},
     {id:'eOff',path:botPath(N.office),type:'office-line',pk:'office'},
@@ -96,12 +96,11 @@ function renderFlowDiagram(){
 
   // Edges
   edges.forEach(e=>{
-    const isDash=e.id==='eGrid';
-    const cls=isDash?edgeClass('flow-edge dashed '+e.type,flowPower[e.pk]):edgeClass('flow-edge '+e.type,flowPower[e.pk]);
+    const cls=edgeClass('flow-edge '+e.type,flowPower[e.pk]);
     svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
+    // Bidirectional edges: faint reverse overlay
+    if(e.bidir) svg+=`<path d="${e.path}" class="flow-edge ${e.type} animated reverse" opacity="0.25"/>`;
   });
-  // Storage line: single line, direction changes dynamically via edgeClass
-  // No fixed bidirectional overlay — direction determined by power sign
   // Nodes
   const fs=Math.max(10,Math.min(R*.55,22)); // icon font size
   Object.entries(N).forEach(([k,n])=>{
@@ -260,8 +259,9 @@ function updateFlowLabels(){
 
 function updateEnergyCards(real){
   if(real){
-    const gF=getVal(allMeterData[1],'energy_forward_total'),gC=getVal(allMeterData[1],'energy_combined_total');
-    setText('gridMonthE',fmt(gF,1));setText('gridYearE',fmt(gF,1));setText('gridTotalE',fmt(gC,1));
+    const gF=getVal(allMeterData[1],'energy_forward_total'),gR=getVal(allMeterData[1],'energy_reverse_total');
+    setText('gridBuyTotal',fmt(gF,1));
+    setText('gridSellTotal',fmt(gR,1));
     const lF=getVal(allMeterData[4],'energy_forward_total'),lC=getVal(allMeterData[4],'energy_combined_total');
     setText('loadMonthE',fmt(lF,1));setText('loadYearE',fmt(lF,1));setText('loadTotalE',fmt(lC||lF,1));
     setText('officeMonthE',fmt(lF,1));setText('officeYearE',fmt(lF,1));setText('officeTotalE',fmt(lC||lF,1));
@@ -279,9 +279,9 @@ function updateEnergyCards(real){
     setText('batDischargeMonth',fmt(bR,1));setText('batDischargeYear',fmt(bR,1));setText('batDischargeTotal',fmt(bR,1));
   }else{
     const v=fmt(sim.grid.p,1),n=fmt(sim.grid.p*8,1);
-    ['gridMonthE','loadMonthE','dc1MonthE','dc2MonthE','acMonthE','officeMonthE','pv1MonthE','pv2MonthE','batChargeMonth','batDischargeMonth'].forEach(id=>setText(id,v));
-    ['gridYearE','loadYearE','dc1YearE','dc2YearE','acYearE','officeYearE','pv1YearE','pv2YearE','batChargeYear','batDischargeYear'].forEach(id=>setText(id,n));
-    ['gridTotalE','loadTotalE','dc1TotalE','dc2TotalE','acTotalE','officeTotalE','pv1TotalE','pv2TotalE','batChargeTotal','batDischargeTotal'].forEach(id=>setText(id,n));
+    ['gridBuyTotal','gridSellTotal','loadMonthE','dc1MonthE','dc2MonthE','acMonthE','officeMonthE','pv1MonthE','pv2MonthE','batChargeMonth','batDischargeMonth'].forEach(id=>setText(id,v));
+    ['loadYearE','dc1YearE','dc2YearE','acYearE','officeYearE','pv1YearE','pv2YearE','batChargeYear','batDischargeYear'].forEach(id=>setText(id,n));
+    ['loadTotalE','dc1TotalE','dc2TotalE','acTotalE','officeTotalE','pv1TotalE','pv2TotalE','batChargeTotal','batDischargeTotal'].forEach(id=>setText(id,n));
   }
 }
 
