@@ -10,6 +10,7 @@ Both services share the same SerialManager instances per port,
 protected by RLock to prevent concurrent bus conflicts.
 """
 
+import os
 import signal
 import sys
 import threading
@@ -303,13 +304,29 @@ def main():
     from meter_api import app
 
     def _signal_handler(sig, frame):
+        logger.info("Shutting down...")
         mqtt_server.stop()
         for mgr in serial_managers.values():
             mgr.close()
-        sys.exit(0)
+        os._exit(0)  # Force exit all threads immediately
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
+
+    # Windows: handle console close (X button)
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            def _console_handler(event):
+                if event in (0, 2):  # CTRL_C=0, CTRL_CLOSE=2
+                    _signal_handler(None, None)
+                    return True
+                return False
+            HANDLER_FUNC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
+            kernel32.SetConsoleCtrlHandler(HANDLER_FUNC(_console_handler), True)
+        except Exception:
+            pass
 
     api_port = config.get("api", {}).get("port", 8000)
     logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)

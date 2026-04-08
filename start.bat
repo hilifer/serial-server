@@ -1,9 +1,9 @@
 @echo off
 chcp 65001 >nul
-title MQTT WS Serial Server + Meter API
+title 光储充管理系统
 
 echo ============================================
-echo   Unified Serial Server (MQTT WS + API)
+echo   光储充管理系统
 echo ============================================
 echo.
 
@@ -45,11 +45,14 @@ if not exist "venv\.deps_installed" (
 )
 echo.
 
-REM Start unified server (MQTT WS bridge + Meter API)
-echo [3/3] Starting unified server...
-echo   Web UI: http://localhost:8000/
-echo   Energy Dashboard: http://localhost:8000/detail.html
+REM Start unified server
+echo [3/3] Starting server...
+echo   停车场:    http://localhost:8000/
+echo   能源看板:  http://localhost:8000/detail.html
+echo   按 Ctrl+C 或关闭窗口停止
 echo ============================================
 python server.py
 
+echo.
+echo 服务已停止
 pause
