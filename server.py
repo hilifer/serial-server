@@ -303,8 +303,15 @@ def main():
     # 3. Import and start Flask API (blocking)
     from meter_api import app
 
+    _shutting_down = False
     def _shutdown():
         """Clean shutdown — close serial ports and MQTT."""
+        nonlocal _shutting_down
+        if _shutting_down:
+            return
+        _shutting_down = True
+        # Guarantee exit in 3 seconds no matter what
+        threading.Timer(3, lambda: os._exit(1)).start()
         try:
             mqtt_server.stop()
         except Exception:
@@ -314,11 +321,10 @@ def main():
                 mgr.close()
             except Exception:
                 pass
+        os._exit(0)
 
     def _signal_handler(sig, frame):
-        logger.info("Shutting down...")
         _shutdown()
-        os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
@@ -326,14 +332,12 @@ def main():
     # Windows: handle Ctrl+C and window X close
     if sys.platform == 'win32':
         import atexit
-        atexit.register(_shutdown)
+        atexit.register(lambda: os._exit(0) if not _shutting_down else None)
         try:
             import ctypes
             HANDLER_FUNC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
             def _console_handler(event):
-                # 0=CTRL_C, 2=CTRL_CLOSE, 5=CTRL_LOGOFF, 6=CTRL_SHUTDOWN
                 _shutdown()
-                os._exit(0)
                 return True
             kernel32 = ctypes.windll.kernel32
             kernel32.SetConsoleCtrlHandler(HANDLER_FUNC(_console_handler), True)
