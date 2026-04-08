@@ -1,86 +1,59 @@
 @echo off
 chcp 65001 >nul
-title 耀嵘光储充管理系统 — 安装
+title 光储充管理系统 — 安装
+
+cd /d "%~dp0"
 
 echo ================================================
-echo   耀嵘光储充管理系统 — 一键安装
+echo   光储充管理系统 — 一键安装
 echo ================================================
 echo.
 
-REM Check Python
-where python >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo [!] 未检测到 Python，正在下载安装...
-    echo     请在弹出的安装界面中勾选 "Add Python to PATH"
-    echo.
-    REM Try to download Python installer
-    powershell -Command "& {Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe' -OutFile '%TEMP%\python_installer.exe'}" 2>nul
-    if exist "%TEMP%\python_installer.exe" (
-        echo 正在启动 Python 安装程序...
-        "%TEMP%\python_installer.exe" /passive InstallAllUsers=1 PrependPath=1
-        echo Python 安装完成，请关闭此窗口重新运行 install.bat
-        pause
-        exit /b
+REM Check if yriot.exe exists
+if not exist "yriot.exe" (
+    REM Maybe we're in installer subfolder, check parent
+    if exist "..\yriot.exe" (
+        cd /d "%~dp0\.."
     ) else (
-        echo [!] 无法自动下载 Python
-        echo     请手动安装 Python 3.10+:
-        echo     https://www.python.org/downloads/
-        echo     安装时务必勾选 "Add Python to PATH"
+        echo [!] 未找到 yriot.exe
+        echo     请确保 install.bat 和 yriot.exe 在同一目录
         pause
         exit /b 1
     )
 )
 
-for /f "tokens=*" %%i in ('python --version 2^>^&1') do set PYVER=%%i
-echo [✓] 检测到 %PYVER%
-echo.
+echo [1/2] 创建桌面快捷方式...
 
-REM Create venv
-echo [1/4] 创建虚拟环境...
-if not exist "venv" (
-    python -m venv venv
+REM Create desktop shortcut using PowerShell (more reliable than vbs)
+powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine($ws.SpecialFolders('Desktop'), '光储充管理系统.lnk')); $s.TargetPath = '%CD%\yriot.exe'; $s.WorkingDirectory = '%CD%'; $s.Description = '光储充管理系统'; $s.Save()"
+
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] 桌面快捷方式已创建
+) else (
+    echo [!] 快捷方式创建失败，请手动双击 yriot.exe 运行
 )
-call venv\Scripts\activate.bat
-echo [✓] 虚拟环境就绪
 echo.
 
-REM Install dependencies
-echo [2/4] 安装依赖包...
-pip install -r requirements.txt -q -i https://pypi.tuna.tsinghua.edu.cn/simple 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    pip install -r requirements.txt -q
-)
-echo ok > venv\.deps_ok
-echo [✓] 依赖安装完成
+echo [2/2] 测试启动...
 echo.
 
-REM Create desktop shortcut
-echo [3/4] 创建桌面快捷方式...
-cscript //nologo installer\create_shortcut.vbs
-echo [✓] 快捷方式已创建
-echo.
+REM Quick test — start server, wait, check, then stop
+start "" /B yriot.exe
+timeout /t 5 /nobreak >nul
+powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/' -TimeoutSec 3 -UseBasicParsing; if($r.StatusCode -eq 200) { Write-Host '[OK] 服务启动正常' } } catch { Write-Host '[!] 服务未响应，可能端口被占用' }"
+taskkill /f /im yriot.exe >nul 2>&1
 
-REM Test run
-echo [4/4] 测试启动...
-python -c "import yaml, serial, flask, paho.mqtt; print('所有依赖正常')"
 echo.
-
 echo ================================================
 echo   安装完成！
 echo.
-echo   启动方式:
-echo     1. 双击桌面上的 "耀嵘光储充管理系统"
-echo     2. 或运行 launch.bat
+echo   使用方法:
+echo     双击桌面上的 "光储充管理系统" 图标
+echo     或直接双击 yriot.exe
 echo.
-echo   访问地址:
-echo     停车场:  http://localhost:8000/
-echo     能源看板: http://localhost:8000/detail.html
+echo   浏览器访问:
+echo     停车场:    http://localhost:8000/
+echo     能源看板:  http://localhost:8000/detail.html
 echo ================================================
 echo.
-
-set /p START="是否立即启动？(Y/N): "
-if /i "%START%"=="Y" (
-    call launch.bat
-)
-
 pause
