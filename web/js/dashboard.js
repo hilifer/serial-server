@@ -117,10 +117,11 @@ function renderFlowDiagram(){
   const lfs=Math.max(7,Math.min(10,R*.22));
   const lsp=lfs+2;
   const labelOff=R*.8;
-  // Grid 3 lines
+  // Grid 3 lines + power
   svg+=`<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fGP" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp*3}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
   // PV1 left: V A + power
   svg+=`<text id="fPv1" x="${N.pv1.x-labelOff}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fPv1P" x="${N.pv1.x-labelOff}" y="${N.pv1.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold">--</text>`;
@@ -196,9 +197,11 @@ function updateFlowLabels(){
   const gIa=getVal(allMeterData[1],'current_a');
   const gIb=getVal(allMeterData[1],'current_b');
   const gIc=getVal(allMeterData[1],'current_c');
+  const gPt=getVal(allMeterData[1],'power_total');
   setText('fG1',gVa!==null?fmt(gVa)+'V   '+fmt(gIa)+'A':'--');
   setText('fG2',gVb!==null?fmt(gVb)+'V   '+fmt(gIb)+'A':'--');
   setText('fG3',gVc!==null?fmt(gVc)+'V   '+fmt(gIc)+'A':'--');
+  setText('fGP',gPt!==null?fmt(gPt)+'kW':'--');
 
   // PV
   const pv1V=getVal(allMeterData[10],'voltage'),pv1I=getVal(allMeterData[10],'current');
