@@ -238,27 +238,103 @@ function updateFlowLabels(){
 function updateEnergyCards(){
   if(!hasRealData) return;
 
+  // 总电量：从 realtime 接口（所有电表都有）
   const gF=getVal(allMeterData[1],'energy_forward_total');
   setText('gridBuyTotal',fmt(gF,1));
 
-  const lF=getVal(allMeterData[4],'energy_forward_total'),lC=getVal(allMeterData[4],'energy_combined_total');
-  setText('loadMonthE',fmt(lF,1));setText('loadYearE',fmt(lF,1));setText('loadTotalE',fmt(lC||lF,1));
-  setText('officeMonthE',fmt(lF,1));setText('officeYearE',fmt(lF,1));setText('officeTotalE',fmt(lC||lF,1));
+  const lF=getVal(allMeterData[4],'energy_forward_total');
+  setText('loadTotalE',fmt(lF,1));
 
-  const d8=getVal(allMeterData[8],'energy_forward_total'),d9=getVal(allMeterData[9],'energy_forward_total');
-  setText('dc1MonthE',fmt(d8,1));setText('dc1YearE',fmt(d8,1));setText('dc1TotalE',fmt(d8,1));
-  setText('dc2MonthE',fmt(d9,1));setText('dc2YearE',fmt(d9,1));setText('dc2TotalE',fmt(d9,1));
+  const d8=getVal(allMeterData[8],'energy_forward_total');
+  const d9=getVal(allMeterData[9],'energy_forward_total');
+  setText('dc1TotalE',fmt(d8,1));
+  setText('dc2TotalE',fmt(d9,1));
 
-  const aF=getVal(allMeterData[3],'energy_forward_total'),aC=getVal(allMeterData[3],'energy_combined_total');
-  setText('acMonthE',fmt(aF,1));setText('acYearE',fmt(aF,1));setText('acTotalE',fmt(aC||aF,1));
+  const aF=getVal(allMeterData[3],'energy_forward_total');
+  setText('acTotalE',fmt(aF,1));
 
-  const p1R=getVal(allMeterData[10],'energy_reverse_total'),p2R=getVal(allMeterData[11],'energy_reverse_total');
-  setText('pv1MonthE',fmt(p1R,1));setText('pv1YearE',fmt(p1R,1));setText('pv1TotalE',fmt(p1R,1));
-  setText('pv2MonthE',fmt(p2R,1));setText('pv2YearE',fmt(p2R,1));setText('pv2TotalE',fmt(p2R,1));
+  setText('officeTotalE',fmt(lF,1));
 
-  const bF=getVal(allMeterData[6],'energy_forward_total'),bR=getVal(allMeterData[6],'energy_reverse_total');
-  setText('batChargeMonth',fmt(bF,1));setText('batChargeYear',fmt(bF,1));setText('batChargeTotal',fmt(bF,1));
-  setText('batDischargeMonth',fmt(bR,1));setText('batDischargeYear',fmt(bR,1));setText('batDischargeTotal',fmt(bR,1));
+  const p1R=getVal(allMeterData[10],'energy_reverse_total');
+  const p2R=getVal(allMeterData[11],'energy_reverse_total');
+  setText('pv1TotalE',fmt(p1R,1));
+  setText('pv2TotalE',fmt(p2R,1));
+
+  const bF=getVal(allMeterData[6],'energy_forward_total');
+  const bR=getVal(allMeterData[6],'energy_reverse_total');
+  setText('batChargeTotal',fmt(bF,1));
+  setText('batDischargeTotal',fmt(bR,1));
+}
+
+// 月/年电量：调 monthly/yearly API（低频，10分钟一次）
+async function pollMonthlyYearly(){
+  // ADL400 (addr 1,2,3,4): 月冻结可能没配置，调了返回null就显示--
+  // DJSF (addr 5,6,8,9,10,11): 有月数据
+
+  const monthlyAddrs=[
+    {addr:4, fwd:'loadMonthE', field:'forward'},
+    {addr:8, fwd:'dc1MonthE', field:'forward'},
+    {addr:9, fwd:'dc2MonthE', field:'forward'},
+    {addr:3, fwd:'acMonthE', field:'forward'},
+    {addr:4, fwd:'officeMonthE', field:'forward'},
+    {addr:10, fwd:'pv1MonthE', field:'reverse'},
+    {addr:11, fwd:'pv2MonthE', field:'reverse'},
+    {addr:6, fwd:'batChargeMonth', field:'forward'},
+  ];
+
+  // 月电量：上月数据
+  for(const m of monthlyAddrs){
+    try{
+      const data=await getMeterMonthly(m.addr,1);
+      if(data&&data.data){
+        if(m.field==='forward'){
+          const v=data.data.energy_forward_kwh||data.data.energy_active_total_kwh;
+          setText(m.fwd,fmt(v,1));
+        }else{
+          const v=data.data.energy_reverse_kwh;
+          setText(m.fwd,fmt(v,1));
+        }
+      }
+    }catch(e){}
+  }
+
+  // 储能放电月
+  try{
+    const data=await getMeterMonthly(6,1);
+    if(data&&data.data){
+      setText('batDischargeMonth',fmt(data.data.energy_reverse_kwh,1));
+    }
+  }catch(e){}
+
+  // 年电量：调 yearly API
+  const yearlyAddrs=[
+    {addr:4, el:'loadYearE', field:'total_energy_kwh'},
+    {addr:8, el:'dc1YearE', field:'total_forward_kwh'},
+    {addr:9, el:'dc2YearE', field:'total_forward_kwh'},
+    {addr:3, el:'acYearE', field:'total_energy_kwh'},
+    {addr:4, el:'officeYearE', field:'total_energy_kwh'},
+    {addr:10, el:'pv1YearE', field:'total_reverse_kwh'},
+    {addr:11, el:'pv2YearE', field:'total_reverse_kwh'},
+    {addr:6, el:'batChargeYear', field:'total_forward_kwh'},
+  ];
+
+  for(const y of yearlyAddrs){
+    try{
+      const data=await getMeterYearly(y.addr);
+      if(data){
+        const v=data[y.field];
+        setText(y.el,fmt(v,1));
+      }
+    }catch(e){}
+  }
+
+  // 储能放电年
+  try{
+    const data=await getMeterYearly(6);
+    if(data){
+      setText('batDischargeYear',fmt(data.total_reverse_kwh,1));
+    }
+  }catch(e){}
 }
 
 async function pollAllMeters(){
@@ -274,5 +350,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   updateDashClock();setInterval(updateDashClock,1000);
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
-  startPolling(pollAllMeters,60000);
+  startPolling(pollAllMeters,60000);       // 实时数据：1分钟
+  startPolling(pollMonthlyYearly,600000);  // 月/年数据：10分钟
 });
