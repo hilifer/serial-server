@@ -11,3 +11,4 @@ installer/build/
 build/
 dist/
 *.spec
+installer/output/
