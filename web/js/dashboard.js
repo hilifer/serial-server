@@ -139,7 +139,9 @@ function renderFlowDiagram(){
   svg+=`<text id="fAcB" x="${N.ac.x-labelOff*1.2}" y="${N.ac.y-RB-blg-lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fAcC" x="${N.ac.x-labelOff*1.2}" y="${N.ac.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fAc" x="${N.ac.x-labelOff*1.2}" y="${N.ac.y-RB-blg}" text-anchor="middle" font-size="${lfs}" fill="${N.ac.lc}" font-weight="bold">--</text>`;
-  svg+=`<text id="fOffVA" x="${N.office.x}" y="${N.office.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fOffA" x="${N.office.x}" y="${N.office.y-RB-blg-lsp*3}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fOffB" x="${N.office.x}" y="${N.office.y-RB-blg-lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fOffC" x="${N.office.x}" y="${N.office.y-RB-blg-lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fOff" x="${N.office.x}" y="${N.office.y-RB-blg}" text-anchor="middle" font-size="${lfs}" fill="${N.office.lc}" font-weight="bold">--</text>`;
 
   svg+='</svg>';
@@ -230,9 +232,13 @@ function updateFlowLabels(){
   setText('fAcC',acVc!==null?fmt(acVc)+'V   '+fmt(Math.abs(acIc))+'A':'--');
   setText('fAc',fmt(flowPower.ac)+'kW');
 
-  // Office
-  const offV=getVal(allMeterData[4],'voltage_a'),offI=getVal(allMeterData[4],'current_a');
-  setText('fOffVA',offV!==null?fmt(offV)+'V   '+fmt(Math.abs(offI))+'A':'--');
+  // Office (addr 4, ADL400): 3-phase V/A + kW
+  const offVa=getVal(allMeterData[4],'voltage_a'),offIa=getVal(allMeterData[4],'current_a');
+  const offVb=getVal(allMeterData[4],'voltage_b'),offIb=getVal(allMeterData[4],'current_b');
+  const offVc=getVal(allMeterData[4],'voltage_c'),offIc=getVal(allMeterData[4],'current_c');
+  setText('fOffA',offVa!==null?fmt(offVa)+'V   '+fmt(Math.abs(offIa))+'A':'--');
+  setText('fOffB',offVb!==null?fmt(offVb)+'V   '+fmt(Math.abs(offIb))+'A':'--');
+  setText('fOffC',offVc!==null?fmt(offVc)+'V   '+fmt(Math.abs(offIc))+'A':'--');
   setText('fOff',fmt(flowPower.office)+'kW');
 
   // Solar hero
