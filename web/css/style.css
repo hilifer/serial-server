@@ -205,11 +205,10 @@ a{color:inherit;text-decoration:none}
 .vi-label{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.6);margin-bottom:2px}
 .vi-value{font-size:clamp(12px,1.4vw,18px);font-weight:bold;color:#fff}
 
-/* Left column: 4 cards */
+/* Left column: 3 cards */
 .dash-col:nth-child(1)>.panel-card:nth-child(1){flex:1} /* 电网购电 */
-.dash-col:nth-child(1)>.panel-card:nth-child(2){flex:1} /* 负载 */
-.dash-col:nth-child(1)>.panel-card:nth-child(3){flex:2} /* 直流桩 */
-.dash-col:nth-child(1)>.panel-card:nth-child(4){flex:1} /* 交流桩 */
+.dash-col:nth-child(1)>.panel-card:nth-child(2){flex:2} /* 直流桩 */
+.dash-col:nth-child(1)>.panel-card:nth-child(3){flex:1} /* 交流桩 */
 
 /* Center column: flow 4 : office 1 */
 .dash-col:nth-child(2){overflow:hidden}
