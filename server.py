@@ -305,7 +305,15 @@ def main():
 
     def _signal_handler(sig, frame):
         print("\n正在关闭...")
-        # 不做清理直接强杀，最可靠
+        try:
+            mqtt_server.stop()
+        except Exception:
+            pass
+        for mgr in serial_managers.values():
+            try:
+                mgr.close()
+            except Exception:
+                pass
         os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
