@@ -305,6 +305,7 @@ async function pollMonthlyYearly(){
 
   for (const {task, data} of results) {
     if (!data || !data.months) continue;
+    yearlyCache[task.addr]=data; // Cache for popup
 
     // 当月电量：从 months 数组取当前月
     const monthData = data.months[currentMonth];
@@ -328,6 +329,69 @@ async function pollMonthlyYearly(){
   }
 }
 
+// Cache yearly data for popup
+let yearlyCache={};
+const meterNames={6:'储能',8:'直流桩1',9:'直流桩2',10:'光伏1',11:'光伏2'};
+const monthNames=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+function showMonthlyPopup(e,addr,field){
+  // Remove existing popup
+  const old=document.querySelector('.monthly-popup');
+  if(old)old.remove();
+
+  const data=yearlyCache[addr];
+  if(!data||!data.months)return;
+
+  const name=meterNames[addr]||'电表'+addr;
+  const isReverse=field==='reverse';
+  const title=name+(isReverse?' 放电':' 充电')+' 月度明细';
+
+  let total=0;
+  let rows='';
+  data.months.forEach((m,i)=>{
+    const v=isReverse?m.energy_reverse_kwh:m.energy_forward_kwh;
+    const fv=v!==null&&v!==undefined?Number(v).toFixed(1):'--';
+    if(v)total+=v;
+    rows+=`<tr><td>${monthNames[i]}</td><td class="val">${fv} kWh</td></tr>`;
+  });
+
+  const popup=document.createElement('div');
+  popup.className='monthly-popup';
+  popup.innerHTML=`
+    <div class="mp-title"><span>${title}</span><span class="mp-close">&times;</span></div>
+    <table><tr><th>月份</th><th style="text-align:right">电量</th></tr>${rows}</table>
+    <div class="mp-total">年合计: ${total.toFixed(1)} kWh</div>
+  `;
+
+  // Position near click
+  const x=Math.min(e.clientX+10,window.innerWidth-300);
+  const y=Math.min(e.clientY-10,window.innerHeight-400);
+  popup.style.left=x+'px';
+  popup.style.top=y+'px';
+
+  document.body.appendChild(popup);
+
+  // Close handlers
+  popup.querySelector('.mp-close').addEventListener('click',()=>popup.remove());
+  setTimeout(()=>{
+    const closeOnClick=(ev)=>{
+      if(!popup.contains(ev.target)){popup.remove();document.removeEventListener('click',closeOnClick)}
+    };
+    document.addEventListener('click',closeOnClick);
+  },100);
+}
+
+// Bind click on year values
+function bindYearClicks(){
+  document.querySelectorAll('.metric-value.clickable').forEach(el=>{
+    el.addEventListener('click',(e)=>{
+      const addr=parseInt(el.dataset.addr);
+      const field=el.dataset.field||(el.id.includes('pv')?'reverse':'forward');
+      if(addr)showMonthlyPopup(e,addr,field);
+    });
+  });
+}
+
 async function pollAllMeters(){
   const results=await Promise.all(meterAddrs.map(async addr=>{
     try{const d=await getMeterRealtime(addr);if(d&&d.data){allMeterData[addr]=d;return true}}catch(e){}
@@ -341,6 +405,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   updateDashClock();setInterval(updateDashClock,1000);
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
+  bindYearClicks();
   startPolling(pollAllMeters,60000);       // 实时数据：1分钟
   startPolling(pollMonthlyYearly,600000);  // 月/年数据：10分钟
 });
