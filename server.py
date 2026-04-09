@@ -303,46 +303,18 @@ def main():
     # 3. Import and start Flask API (blocking)
     from meter_api import app
 
-    _shutting_down = False
-    def _shutdown():
-        """Clean shutdown — close serial ports and MQTT."""
-        nonlocal _shutting_down
-        if _shutting_down:
-            return
-        _shutting_down = True
-        # Guarantee exit in 3 seconds no matter what
-        threading.Timer(3, lambda: os._exit(1)).start()
-        try:
-            mqtt_server.stop()
-        except Exception:
-            pass
-        for name, mgr in serial_managers.items():
-            try:
-                mgr.close()
-            except Exception:
-                pass
-        os._exit(0)
-
     def _signal_handler(sig, frame):
-        _shutdown()
+        print("\n正在关闭...")
+        # 不做清理直接强杀，最可靠
+        os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    # Windows: handle Ctrl+C and window X close
+    # Windows: Ctrl+C needs special handling for Flask threaded mode
     if sys.platform == 'win32':
         import atexit
-        atexit.register(lambda: os._exit(0) if not _shutting_down else None)
-        try:
-            import ctypes
-            HANDLER_FUNC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_ulong)
-            def _console_handler(event):
-                _shutdown()
-                return True
-            kernel32 = ctypes.windll.kernel32
-            kernel32.SetConsoleCtrlHandler(HANDLER_FUNC(_console_handler), True)
-        except Exception:
-            pass
+        atexit.register(lambda: os._exit(0))
 
     api_port = config.get("api", {}).get("port", 8000)
     logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)
