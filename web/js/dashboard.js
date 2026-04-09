@@ -121,11 +121,15 @@ function renderFlowDiagram(){
   svg+=`<text id="fG1" x="${N.grid.x}" y="${N.grid.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fG2" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
   svg+=`<text id="fG3" x="${N.grid.x}" y="${N.grid.y+R+lg+lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.grid.lc}" font-weight="bold">--</text>`;
-  // PV1 left, PV2 right
+  // PV1 left: V A + power
   svg+=`<text id="fPv1" x="${N.pv1.x-labelOff}" y="${N.pv1.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fPv1P" x="${N.pv1.x-labelOff}" y="${N.pv1.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.pv1.lc}" font-weight="bold">--</text>`;
+  // PV2 right: V A + power
   svg+=`<text id="fPv2" x="${N.pv2.x+labelOff}" y="${N.pv2.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold">--</text>`;
-  // Storage
+  svg+=`<text id="fPv2P" x="${N.pv2.x+labelOff}" y="${N.pv2.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.pv2.lc}" font-weight="bold">--</text>`;
+  // Storage: V A + power
   svg+=`<text id="fStor" x="${N.storage.x}" y="${N.storage.y+R+lg}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold">--</text>`;
+  svg+=`<text id="fStorP" x="${N.storage.x}" y="${N.storage.y+R+lg+lsp}" text-anchor="middle" font-size="${lfs}" fill="${N.storage.lc}" font-weight="bold">--</text>`;
   // Bottom
   const blg=Math.max(12,RB*.3);
   svg+=`<text id="fDc8" x="${N.dc.x-labelOff}" y="${N.dc.y-RB-blg-lsp*2}" text-anchor="middle" font-size="${lfs}" fill="${N.dc.lc}" font-weight="bold">--</text>`;
@@ -197,12 +201,18 @@ function updateFlowLabels(){
   // PV
   const pv1V=getVal(allMeterData[10],'voltage'),pv1I=getVal(allMeterData[10],'current');
   const pv2V=getVal(allMeterData[11],'voltage'),pv2I=getVal(allMeterData[11],'current');
+  const pv1Pwr=getVal(allMeterData[10],'power');
+  const pv2Pwr=getVal(allMeterData[11],'power');
   setText('fPv1',pv1V!==null?fmt(pv1V,0)+'V   '+fmt(Math.abs(pv1I))+'A':'--');
+  setText('fPv1P',pv1Pwr!==null?fmt(Math.abs(pv1Pwr))+'kW':'--');
   setText('fPv2',pv2V!==null?fmt(pv2V,0)+'V   '+fmt(Math.abs(pv2I))+'A':'--');
+  setText('fPv2P',pv2Pwr!==null?fmt(Math.abs(pv2Pwr))+'kW':'--');
 
-  // Storage
+  // Storage — current takes absolute value
   const sV=getVal(allMeterData[6],'voltage'),sI=getVal(allMeterData[6],'current');
-  setText('fStor',sV!==null?fmt(sV)+'V   '+fmt(sI)+'A':'--');
+  const sPwr=getVal(allMeterData[6],'power');
+  setText('fStor',sV!==null?fmt(sV)+'V   '+fmt(Math.abs(sI))+'A':'--');
+  setText('fStorP',sPwr!==null?fmt(Math.abs(sPwr))+'kW':'--');
 
   // DC pile
   const dc8V=getVal(allMeterData[8],'voltage'),dc8I=getVal(allMeterData[8],'current');
