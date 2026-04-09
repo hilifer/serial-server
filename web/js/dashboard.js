@@ -282,75 +282,50 @@ function updateEnergyCards(){
   setText('batDischargeTotal',fmt(bR,1));
 }
 
-// 月/年电量：调 monthly/yearly API（低频，10分钟一次）
+// 月/年电量：只调 yearly API（已包含12个月明细 + 年合计）
+// 当月电量 = months[当前月份-1]，年电量 = total
+// 只查 DJSF 电表（ADL400 不支持月冻结）
 async function pollMonthlyYearly(){
-  // ADL400 (addr 1,2,3,4): 月冻结可能没配置，调了返回null就显示--
-  // DJSF (addr 5,6,8,9,10,11): 有月数据
+  const currentMonth = new Date().getMonth(); // 0-based
 
-  const monthlyAddrs=[
-    {addr:4, fwd:'loadMonthE', field:'forward'},
-    {addr:8, fwd:'dc1MonthE', field:'forward'},
-    {addr:9, fwd:'dc2MonthE', field:'forward'},
-    {addr:3, fwd:'acMonthE', field:'forward'},
-    {addr:4, fwd:'officeMonthE', field:'forward'},
-    {addr:10, fwd:'pv1MonthE', field:'reverse'},
-    {addr:11, fwd:'pv2MonthE', field:'reverse'},
-    {addr:6, fwd:'batChargeMonth', field:'forward'},
+  const tasks = [
+    {addr:8,  monthEl:'dc1MonthE', yearEl:'dc1YearE', field:'forward'},
+    {addr:9,  monthEl:'dc2MonthE', yearEl:'dc2YearE', field:'forward'},
+    {addr:10, monthEl:'pv1MonthE', yearEl:'pv1YearE', field:'reverse'},
+    {addr:11, monthEl:'pv2MonthE', yearEl:'pv2YearE', field:'reverse'},
+    {addr:6,  monthEl:'batChargeMonth', yearEl:'batChargeYear', field:'forward',
+              monthEl2:'batDischargeMonth', yearEl2:'batDischargeYear', field2:'reverse'},
   ];
 
-  // 月电量：上月数据
-  for(const m of monthlyAddrs){
-    try{
-      const data=await getMeterMonthly(m.addr,1);
-      if(data&&data.data){
-        if(m.field==='forward'){
-          const v=data.data.energy_forward_kwh||data.data.energy_active_total_kwh;
-          setText(m.fwd,fmt(v,1));
-        }else{
-          const v=data.data.energy_reverse_kwh;
-          setText(m.fwd,fmt(v,1));
-        }
+  // 并行请求所有 yearly
+  const results = await Promise.all(tasks.map(async t => {
+    try { return {task:t, data:await getMeterYearly(t.addr)}; }
+    catch(e) { return {task:t, data:null}; }
+  }));
+
+  for (const {task, data} of results) {
+    if (!data || !data.months) continue;
+
+    // 当月电量：从 months 数组取当前月
+    const monthData = data.months[currentMonth];
+    if (monthData) {
+      const monthVal = task.field === 'forward' ? monthData.energy_forward_kwh : monthData.energy_reverse_kwh;
+      setText(task.monthEl, fmt(monthVal, 1));
+      // 储能有第二个字段（放电）
+      if (task.monthEl2 && task.field2) {
+        const monthVal2 = task.field2 === 'forward' ? monthData.energy_forward_kwh : monthData.energy_reverse_kwh;
+        setText(task.monthEl2, fmt(monthVal2, 1));
       }
-    }catch(e){}
-  }
-
-  // 储能放电月
-  try{
-    const data=await getMeterMonthly(6,1);
-    if(data&&data.data){
-      setText('batDischargeMonth',fmt(data.data.energy_reverse_kwh,1));
     }
-  }catch(e){}
 
-  // 年电量：调 yearly API
-  const yearlyAddrs=[
-    {addr:4, el:'loadYearE', field:'total_energy_kwh'},
-    {addr:8, el:'dc1YearE', field:'total_forward_kwh'},
-    {addr:9, el:'dc2YearE', field:'total_forward_kwh'},
-    {addr:3, el:'acYearE', field:'total_energy_kwh'},
-    {addr:4, el:'officeYearE', field:'total_energy_kwh'},
-    {addr:10, el:'pv1YearE', field:'total_reverse_kwh'},
-    {addr:11, el:'pv2YearE', field:'total_reverse_kwh'},
-    {addr:6, el:'batChargeYear', field:'total_forward_kwh'},
-  ];
-
-  for(const y of yearlyAddrs){
-    try{
-      const data=await getMeterYearly(y.addr);
-      if(data){
-        const v=data[y.field];
-        setText(y.el,fmt(v,1));
-      }
-    }catch(e){}
-  }
-
-  // 储能放电年
-  try{
-    const data=await getMeterYearly(6);
-    if(data){
-      setText('batDischargeYear',fmt(data.total_reverse_kwh,1));
+    // 年电量：从 total 取
+    const yearVal = task.field === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+    setText(task.yearEl, fmt(yearVal, 1));
+    if (task.yearEl2 && task.field2) {
+      const yearVal2 = task.field2 === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+      setText(task.yearEl2, fmt(yearVal2, 1));
     }
-  }catch(e){}
+  }
 }
 
 async function pollAllMeters(){
