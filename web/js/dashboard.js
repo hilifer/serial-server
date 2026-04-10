@@ -101,10 +101,10 @@ function renderFlowDiagram(){
   edges.forEach(e=>{
     const cls=edgeClass('flow-edge '+e.type,flowPower[e.pk]);
     if(e.bidir){
-      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)" marker-start="url(#arrow-rev)"/>`;
+      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
       svg+=`<path d="${e.path}" class="flow-edge ${e.type} animated reverse" opacity="0.25"/>`;
     }else{
-      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)"/>`;
+      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
     }
   });
 
@@ -177,7 +177,19 @@ function updateEdgeStyles(){
    ['eOff','flow-edge office-line',flowPower.office]
   ].forEach(([id,base,p])=>{
     const el=document.getElementById(id);
-    if(el)el.setAttribute('class',edgeClass(base,p));
+    if(!el)return;
+    el.setAttribute('class',edgeClass(base,p));
+    // 箭头跟着流动方向：正向=终点，反向=起点，静止=无
+    if(p===null||p===undefined||Math.abs(p)<.1){
+      el.removeAttribute('marker-end');
+      el.removeAttribute('marker-start');
+    }else if(p<0){
+      el.setAttribute('marker-start','url(#arrow-rev)');
+      el.removeAttribute('marker-end');
+    }else{
+      el.setAttribute('marker-end','url(#arrow)');
+      el.removeAttribute('marker-start');
+    }
   });
 }
 
