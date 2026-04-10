@@ -365,6 +365,31 @@ async function pollYearly(){
   }
 }
 
+// 每次 realtime 刷新后，用缓存的12月冻结 + 最新当月值重算年电量
+function updateYearWithCurrentMonth(){
+  const tasks = [
+    {addr:8,  yearEl:'dc1YearE', field:'forward'},
+    {addr:9,  yearEl:'dc2YearE', field:'forward'},
+    {addr:10, yearEl:'pv1YearE', field:'reverse'},
+    {addr:11, yearEl:'pv2YearE', field:'reverse'},
+    {addr:6,  yearEl:'batChargeYear', field:'forward',
+              yearEl2:'batDischargeYear', field2:'reverse'},
+  ];
+  for(const t of tasks){
+    const yData=yearlyCache[t.addr];
+    if(!yData) continue;
+    const curMonth=allMeterData[t.addr]&&allMeterData[t.addr].current_month;
+    const curFwd=curMonth?(curMonth.energy_forward_kwh||0):0;
+    const curRev=curMonth?(curMonth.energy_reverse_kwh||0):0;
+    const yVal=(t.field==='forward'?yData.total_forward_kwh:yData.total_reverse_kwh)+(t.field==='forward'?curFwd:curRev);
+    setText(t.yearEl,fmt(yVal,1));
+    if(t.yearEl2&&t.field2){
+      const yVal2=(t.field2==='forward'?yData.total_forward_kwh:yData.total_reverse_kwh)+(t.field2==='forward'?curFwd:curRev);
+      setText(t.yearEl2,fmt(yVal2,1));
+    }
+  }
+}
+
 // Cache yearly data for popup
 let yearlyCache={};
 const meterNames={6:'储能',8:'直流桩1',9:'直流桩2',10:'光伏1',11:'光伏2'};
@@ -442,7 +467,8 @@ async function pollAllMeters(){
   }));
   hasRealData=results.some(r=>r);
   updateFlowLabels();
-  updateCurrentMonth(); // 当月电量从 realtime 返回里取
+  updateCurrentMonth();
+  updateYearWithCurrentMonth(); // 用缓存的12月冻结 + 最新当月值重算年电量
 }
 
 // Timer management
