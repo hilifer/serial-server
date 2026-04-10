@@ -66,9 +66,10 @@ function renderFlowDiagram(){
     if(Math.abs(x-CX)<3)return `M${x},${y1} L${x},${y2}`;
     return `M${x},${y1} L${x},${jy} L${CX},${jy} L${CX},${y2}`;
   }
+  // 储能→光储系统（放电方向，箭头指向光储系统）
   function storagePath(){
     const tx=CX+RW,ty=midY,x=N.storage.x,y2=N.storage.y+R;
-    return `M${tx},${ty} L${x},${ty} L${x},${y2}`;
+    return `M${x},${y2} L${x},${ty} L${tx},${ty}`;
   }
   function botPath(node){
     const x=node.x,y1=midY+RH,y2=node.y-node.r;
@@ -89,8 +90,8 @@ function renderFlowDiagram(){
 
   let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
-      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-        <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.7"/>
+      <marker id="arrow" markerWidth="10" markerHeight="8" refX="5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 10 4, 0 8" fill="#3b82f6" opacity="0.8"/>
       </marker>
     </defs>`;
 
