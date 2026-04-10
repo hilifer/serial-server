@@ -93,12 +93,19 @@ function renderFlowDiagram(){
       <marker id="arrow" markerWidth="10" markerHeight="8" refX="5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
         <polygon points="0 0, 10 4, 0 8" fill="#3b82f6" opacity="0.8"/>
       </marker>
+      <marker id="arrow-rev" markerWidth="10" markerHeight="8" refX="5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="10 0, 0 4, 10 8" fill="#3b82f6" opacity="0.5"/>
+      </marker>
     </defs>`;
 
   edges.forEach(e=>{
     const cls=edgeClass('flow-edge '+e.type,flowPower[e.pk]);
-    svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)"/>`;
-    if(e.bidir) svg+=`<path d="${e.path}" class="flow-edge ${e.type} animated reverse" opacity="0.25"/>`;
+    if(e.bidir){
+      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)" marker-start="url(#arrow-rev)"/>`;
+      svg+=`<path d="${e.path}" class="flow-edge ${e.type} animated reverse" opacity="0.25"/>`;
+    }else{
+      svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)"/>`;
+    }
   });
 
   const fs=Math.max(10,Math.min(R*.55,22));
