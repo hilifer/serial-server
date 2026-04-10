@@ -51,6 +51,9 @@ echo   停车场:    http://localhost:8000/
 echo   能源看板:  http://localhost:8000/detail.html
 echo   按 Ctrl+C 或关闭窗口停止
 echo ============================================
+
+REM Auto open browser in fullscreen (F11) after 3 seconds
+start "" cmd /c "timeout /t 3 /nobreak >nul && start chrome --start-fullscreen http://localhost:8000/ 2>nul || start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/"
 python server.py
 
 echo.
