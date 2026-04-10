@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 chcp 65001 >nul
 title 光储充管理系统
 
@@ -52,10 +53,39 @@ echo   能源看板:  http://localhost:8000/detail.html
 echo   按 Ctrl+C 或关闭窗口停止
 echo ============================================
 
-REM Auto open browser in fullscreen (F11) after 3 seconds
-start "" cmd /c "timeout /t 3 /nobreak >nul && start chrome --start-fullscreen http://localhost:8000/ 2>nul || start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/"
-python server.py
+REM Start server in background, wait for it to be ready
+start "" /B python server.py
+
+REM Wait for serial port and HTTP service to be ready (max 15 seconds)
+set READY=0
+for /L %%i in (1,1,15) do (
+    timeout /t 1 /nobreak >nul
+    powershell -Command "try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/status' -TimeoutSec 2 -UseBasicParsing; if($r.StatusCode -eq 200) { exit 0 } } catch { exit 1 }" 2>nul
+    if !ERRORLEVEL! EQU 0 (
+        set READY=1
+        goto :CHECK_SERIAL
+    )
+)
+
+:CHECK_SERIAL
+if %READY% EQU 0 (
+    echo.
+    echo ================================================
+    echo   [!] 警告：服务启动超时！
+    echo ================================================
+    pause
+    goto :WAIT_EXIT
+)
+
+REM Check serial port status
+powershell -Command "$r = Invoke-WebRequest -Uri 'http://localhost:8000/status' -UseBasicParsing; $j = $r.Content | ConvertFrom-Json; $allOk = $true; foreach($p in $j.ports.PSObject.Properties) { if($p.Value.status -ne 'connected') { Write-Host ('[!] 警告：' + $p.Name + ' 串口未连接 - ' + $p.Value.last_error); $allOk = $false } else { Write-Host ('[OK] ' + $p.Name + ' 已连接') } }; if(-not $allOk) { Write-Host ''; Write-Host '部分串口未连接，请检查设备连接！'; Write-Host '' }" 2>nul
 
 echo.
-echo 服务已停止
-pause
+
+REM Open browser in fullscreen
+start chrome --start-fullscreen http://localhost:8000/ 2>nul || start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/
+
+:WAIT_EXIT
+REM Keep window open to show logs
+echo 服务运行中，按 Ctrl+C 停止...
+cmd /k
