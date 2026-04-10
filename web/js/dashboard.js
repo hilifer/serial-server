@@ -90,11 +90,11 @@ function renderFlowDiagram(){
 
   let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
-      <marker id="arrow" markerWidth="10" markerHeight="8" refX="5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-        <polygon points="0 0, 10 4, 0 8" fill="#3b82f6" opacity="0.8"/>
+      <marker id="arrow" markerWidth="14" markerHeight="10" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 14 5, 0 10" fill="#3b82f6" opacity="0.8"/>
       </marker>
-      <marker id="arrow-rev" markerWidth="10" markerHeight="8" refX="5" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-        <polygon points="10 0, 0 4, 10 8" fill="#3b82f6" opacity="0.5"/>
+      <marker id="arrow-rev" markerWidth="14" markerHeight="10" refX="7" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="14 0, 0 5, 14 10" fill="#3b82f6" opacity="0.8"/>
       </marker>
     </defs>`;
 
