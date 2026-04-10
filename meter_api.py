@@ -16,6 +16,7 @@ Endpoints:
 """
 
 import logging
+import time
 import requests as http_requests
 
 from flask import Flask, jsonify, request, abort
@@ -403,11 +404,16 @@ def get_yearly(addr: int):
         total_fwd = 0.0
         total_rev = 0.0
         months = []
+        current_month = time.localtime().tm_mon  # 1-based
 
         with ser.lock():
             for m in range(1, 13):
                 fwd_kwh = None
                 rev_kwh = None
+
+                # Only months < current month are this year's data
+                # months >= current month are last year's (rolling storage)
+                is_this_year = m < current_month
 
                 req_fwd = build_monthly_history_request_djsf(
                     meter.slave_addr, m, "forward")
@@ -416,7 +422,8 @@ def get_yearly(addr: int):
                     data = parse_read_response(resp) if resp else None
                     if data:
                         fwd_kwh = parse_djsf_monthly_energy(data)
-                        total_fwd += fwd_kwh
+                        if is_this_year:
+                            total_fwd += fwd_kwh
 
                 req_rev = build_monthly_history_request_djsf(
                     meter.slave_addr, m, "reverse")
@@ -425,12 +432,14 @@ def get_yearly(addr: int):
                     data = parse_read_response(resp) if resp else None
                     if data:
                         rev_kwh = parse_djsf_monthly_energy(data)
-                        total_rev += rev_kwh
+                        if is_this_year:
+                            total_rev += rev_kwh
 
                 months.append({
                     "month": m,
                     "energy_forward_kwh": fwd_kwh,
                     "energy_reverse_kwh": rev_kwh,
+                    "is_this_year": is_this_year,
                 })
 
         return jsonify({

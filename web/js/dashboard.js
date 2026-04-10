@@ -413,10 +413,11 @@ function showMonthlyPopup(e,addr,field){
   const curMonth=allMeterData[addr]&&allMeterData[addr].current_month;
   const curVal=curMonth?(isReverse?curMonth.energy_reverse_kwh:curMonth.energy_forward_kwh):null;
 
+  // Only show this year's months + current month
   data.months.forEach((m,i)=>{
+    if(!m.is_this_year && i!==curMonthIdx) return; // skip last year's data
     let v=isReverse?m.energy_reverse_kwh:m.energy_forward_kwh;
     let isCur=false;
-    // 当前月：用实时值替换冻结值
     if(i===curMonthIdx&&curVal!==null&&curVal!==undefined){
       v=curVal;
       isCur=true;
