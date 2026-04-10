@@ -289,7 +289,9 @@ function updateEnergyCards(){
 // 当月电量 = months[当前月份-1]，年电量 = total
 // 只查 DJSF 电表（ADL400 不支持月冻结）
 async function pollMonthlyYearly(){
-  const currentMonth = new Date().getMonth(); // 0-based
+  // 月电量 = 上月冻结值（当月还没冻结）
+  const lastMonth = new Date().getMonth() - 1; // 0-based, -1=上月
+  const lastMonthIdx = lastMonth < 0 ? 11 : lastMonth;
 
   const tasks = [
     {addr:8,  monthEl:'dc1MonthE', yearEl:'dc1YearE', field:'forward'},
@@ -311,7 +313,7 @@ async function pollMonthlyYearly(){
     yearlyCache[task.addr]=data; // Cache for popup
 
     // 当月电量：从 months 数组取当前月
-    const monthData = data.months[currentMonth];
+    const monthData = data.months[lastMonthIdx];
     if (monthData) {
       const monthVal = task.field === 'forward' ? monthData.energy_forward_kwh : monthData.energy_reverse_kwh;
       setText(task.monthEl, fmt(monthVal, 1));
