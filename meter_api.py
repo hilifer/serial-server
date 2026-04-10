@@ -179,12 +179,35 @@ def get_realtime(addr: int):
             except Exception:
                 results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
 
-    return jsonify({
+        # DJSF: also read current month energy in same lock session
+        current_month = None
+        if meter.meter_type != MeterType.ADL400:
+            if meter.meter_type == MeterType.DJSF1352_RN_6:
+                fwd_reg, rev_reg = 12306, 12342
+            else:
+                fwd_reg, rev_reg = 2010, 2150
+            fwd_kwh = None
+            rev_kwh = None
+            data = safe_read_registers(ser, meter.slave_addr, fwd_reg, 2)
+            if data:
+                fwd_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+            data = safe_read_registers(ser, meter.slave_addr, rev_reg, 2)
+            if data:
+                rev_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+            current_month = {
+                "energy_forward_kwh": round(fwd_kwh, 3) if fwd_kwh is not None else None,
+                "energy_reverse_kwh": round(rev_kwh, 3) if rev_kwh is not None else None,
+            }
+
+    resp = {
         "address": addr,
         "name": meter.name,
         "model": meter.model,
         "data": results,
-    })
+    }
+    if current_month:
+        resp["current_month"] = current_month
+    return jsonify(resp)
 
 
 @app.get("/meter/<int:addr>/daily")

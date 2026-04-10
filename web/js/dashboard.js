@@ -288,44 +288,50 @@ function updateEnergyCards(){
 // 月/年电量：只调 yearly API（已包含12个月明细 + 年合计）
 // 当月电量 = months[当前月份-1]，年电量 = total
 // 只查 DJSF 电表（ADL400 不支持月冻结）
-async function pollMonthlyYearly(){
+// 当月电量：从 realtime 返回的 current_month 字段取（不用额外请求）
+function updateCurrentMonth(){
+  if(!hasRealData) return;
   const tasks = [
-    {addr:8,  monthEl:'dc1MonthE', yearEl:'dc1YearE', field:'forward'},
-    {addr:9,  monthEl:'dc2MonthE', yearEl:'dc2YearE', field:'forward'},
-    {addr:10, monthEl:'pv1MonthE', yearEl:'pv1YearE', field:'reverse'},
-    {addr:11, monthEl:'pv2MonthE', yearEl:'pv2YearE', field:'reverse'},
-    {addr:6,  monthEl:'batChargeMonth', yearEl:'batChargeYear', field:'forward',
-              monthEl2:'batDischargeMonth', yearEl2:'batDischargeYear', field2:'reverse'},
+    {addr:8,  el:'dc1MonthE', field:'forward'},
+    {addr:9,  el:'dc2MonthE', field:'forward'},
+    {addr:10, el:'pv1MonthE', field:'reverse'},
+    {addr:11, el:'pv2MonthE', field:'reverse'},
+    {addr:6,  el:'batChargeMonth', field:'forward', el2:'batDischargeMonth', field2:'reverse'},
   ];
-
-  // 并行：当月实时值 + 年合计
-  const results = await Promise.all(tasks.map(async t => {
-    let curMonth=null, yearly=null;
-    try { curMonth = await getMeterCurrentMonth(t.addr); } catch(e) {}
-    try { yearly = await getMeterYearly(t.addr); } catch(e) {}
-    return {task:t, curMonth, yearly};
-  }));
-
-  for (const {task, curMonth, yearly} of results) {
-    // 当月电量：从 current_month API 取（实时累计值）
-    if (curMonth) {
-      const mVal = task.field === 'forward' ? curMonth.energy_forward_kwh : curMonth.energy_reverse_kwh;
-      setText(task.monthEl, fmt(mVal, 1));
-      if (task.monthEl2 && task.field2) {
-        const mVal2 = task.field2 === 'forward' ? curMonth.energy_forward_kwh : curMonth.energy_reverse_kwh;
-        setText(task.monthEl2, fmt(mVal2, 1));
-      }
+  for(const t of tasks){
+    const d=allMeterData[t.addr];
+    if(!d||!d.current_month) continue;
+    const v=t.field==='forward'?d.current_month.energy_forward_kwh:d.current_month.energy_reverse_kwh;
+    setText(t.el,fmt(v,1));
+    if(t.el2&&t.field2){
+      const v2=t.field2==='forward'?d.current_month.energy_forward_kwh:d.current_month.energy_reverse_kwh;
+      setText(t.el2,fmt(v2,1));
     }
+  }
+}
 
-    // 年电量：从 yearly API 取
-    if (yearly && yearly.months) {
-      yearlyCache[task.addr] = yearly;
-      const yVal = task.field === 'forward' ? yearly.total_forward_kwh : yearly.total_reverse_kwh;
-      setText(task.yearEl, fmt(yVal, 1));
-      if (task.yearEl2 && task.field2) {
-        const yVal2 = task.field2 === 'forward' ? yearly.total_forward_kwh : yearly.total_reverse_kwh;
-        setText(task.yearEl2, fmt(yVal2, 1));
-      }
+// 年电量：单独调 yearly API（慢，后台加载）
+async function pollYearly(){
+  const tasks = [
+    {addr:8,  yearEl:'dc1YearE', field:'forward'},
+    {addr:9,  yearEl:'dc2YearE', field:'forward'},
+    {addr:10, yearEl:'pv1YearE', field:'reverse'},
+    {addr:11, yearEl:'pv2YearE', field:'reverse'},
+    {addr:6,  yearEl:'batChargeYear', field:'forward',
+              yearEl2:'batDischargeYear', field2:'reverse'},
+  ];
+  const results = await Promise.all(tasks.map(async t => {
+    try { return {task:t, data:await getMeterYearly(t.addr)}; }
+    catch(e) { return {task:t, data:null}; }
+  }));
+  for (const {task, data} of results) {
+    if (!data || !data.months) continue;
+    yearlyCache[task.addr] = data;
+    const yVal = task.field === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+    setText(task.yearEl, fmt(yVal, 1));
+    if (task.yearEl2 && task.field2) {
+      const yVal2 = task.field2 === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+      setText(task.yearEl2, fmt(yVal2, 1));
     }
   }
 }
@@ -400,6 +406,7 @@ async function pollAllMeters(){
   }));
   hasRealData=results.some(r=>r);
   updateFlowLabels();
+  updateCurrentMonth(); // 当月电量从 realtime 返回里取
 }
 
 // Timer management
@@ -420,17 +427,15 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  addTimer(pollAllMeters,60000);       // 实时数据：1分钟
-  addTimer(pollMonthlyYearly,600000);  // 月/年数据：10分钟
+  addTimer(pollAllMeters,60000);   // 实时+当月：立即读，之后1分钟
+  pollYearly();                     // 年数据：只读一次（一个月才变）
 });
 
-// Clear timers on page exit
 window.addEventListener('beforeunload',clearAllTimers);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearAllTimers();
   else{
     addTimer(updateDashClock,1000);
     addTimer(pollAllMeters,60000);
-    addTimer(pollMonthlyYearly,600000);
   }
 });
