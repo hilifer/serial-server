@@ -352,10 +352,14 @@ async function pollYearly(){
   for (const {task, data} of results) {
     if (!data || !data.months) continue;
     yearlyCache[task.addr] = data;
-    const yVal = task.field === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+    // 年电量 = 12个月冻结累加 + 当月实时值
+    const curMonth = allMeterData[task.addr] && allMeterData[task.addr].current_month;
+    const curFwd = curMonth ? (curMonth.energy_forward_kwh||0) : 0;
+    const curRev = curMonth ? (curMonth.energy_reverse_kwh||0) : 0;
+    const yVal = (task.field === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh) + (task.field === 'forward' ? curFwd : curRev);
     setText(task.yearEl, fmt(yVal, 1));
     if (task.yearEl2 && task.field2) {
-      const yVal2 = task.field2 === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
+      const yVal2 = (task.field2 === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh) + (task.field2 === 'forward' ? curFwd : curRev);
       setText(task.yearEl2, fmt(yVal2, 1));
     }
   }
@@ -380,12 +384,19 @@ function showMonthlyPopup(e,addr,field){
 
   let total=0;
   let rows='';
+  const curMonthIdx=new Date().getMonth(); // 0-based
   data.months.forEach((m,i)=>{
     const v=isReverse?m.energy_reverse_kwh:m.energy_forward_kwh;
     const fv=v!==null&&v!==undefined?Number(v).toFixed(1):'--';
     if(v)total+=v;
     rows+=`<tr><td>${monthNames[i]}</td><td class="val">${fv} kWh</td></tr>`;
   });
+  // 当月实时值
+  const curMonth=allMeterData[addr]&&allMeterData[addr].current_month;
+  const curVal=curMonth?(isReverse?curMonth.energy_reverse_kwh:curMonth.energy_forward_kwh):null;
+  const curFv=curVal!==null&&curVal!==undefined?Number(curVal).toFixed(1):'--';
+  if(curVal)total+=curVal;
+  rows+=`<tr style="color:#00d4ff"><td>${monthNames[curMonthIdx]}(当月)</td><td class="val" style="color:#00d4ff">${curFv} kWh</td></tr>`;
 
   const popup=document.createElement('div');
   popup.className='monthly-popup';
