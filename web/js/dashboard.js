@@ -66,10 +66,10 @@ function renderFlowDiagram(){
     if(Math.abs(x-CX)<3)return `M${x},${y1} L${x},${y2}`;
     return `M${x},${y1} L${x},${jy} L${CX},${jy} L${CX},${y2}`;
   }
-  // 储能→光储系统（放电方向，箭头指向光储系统）
+  // 光储系统 ↔ 储能 (bidirectional)
   function storagePath(){
     const tx=CX+RW,ty=midY,x=N.storage.x,y2=N.storage.y+R;
-    return `M${x},${y2} L${x},${ty} L${tx},${ty}`;
+    return `M${tx},${ty} L${x},${ty} L${x},${y2}`;
   }
   function botPath(node){
     const x=node.x,y1=midY+RH,y2=node.y-node.r;
