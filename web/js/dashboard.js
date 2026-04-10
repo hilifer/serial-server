@@ -87,11 +87,16 @@ function renderFlowDiagram(){
     {id:'eOff',path:botPath(N.office),type:'office-line',pk:'office'},
   ];
 
-  let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">`;
+  let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#3b82f6" opacity="0.7"/>
+      </marker>
+    </defs>`;
 
   edges.forEach(e=>{
     const cls=edgeClass('flow-edge '+e.type,flowPower[e.pk]);
-    svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
+    svg+=`<path id="${e.id}" d="${e.path}" class="${cls}" marker-end="url(#arrow)"/>`;
     if(e.bidir) svg+=`<path d="${e.path}" class="flow-edge ${e.type} animated reverse" opacity="0.25"/>`;
   });
 
