@@ -253,15 +253,33 @@ async function pollPiles() {
   }
 }
 
+// ---- Timer management ----
+const parkTimers=[];
+function addParkTimer(fn,ms){
+  fn();
+  const id=setInterval(fn,ms);
+  parkTimers.push(id);
+}
+function clearParkTimers(){
+  parkTimers.forEach(id=>clearInterval(id));
+  parkTimers.length=0;
+}
+
 // ---- Init ----
 document.addEventListener('DOMContentLoaded', () => {
-  // Initial render with empty state
   renderCars();
   renderPiles();
 
-  // Start polling
-  startPolling(pollParking, 30000); // 30秒读一次车位
-  startPolling(pollGuns, 30000);    // 30秒读一次充电枪
+  addParkTimer(pollParking, 30000);
+  addParkTimer(pollGuns, 30000);
   pollPiles();
+});
 
+window.addEventListener('beforeunload',clearParkTimers);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) clearParkTimers();
+  else{
+    addParkTimer(pollParking, 30000);
+    addParkTimer(pollGuns, 30000);
+  }
 });

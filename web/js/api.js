@@ -49,6 +49,10 @@ async function getMeterYearly(addr) {
     return fetchJSON(`/meter/${addr}/yearly`);
 }
 
+async function getMeterCurrentMonth(addr) {
+    return fetchJSON(`/meter/${addr}/current_month`);
+}
+
 // ---- Charging (Odoo proxy) ----
 async function getChargingPiles() {
     return fetchJSON('/charging/piles');

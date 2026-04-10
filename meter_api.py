@@ -303,6 +303,45 @@ def get_monthly(addr: int):
         })
 
 
+@app.get("/meter/<int:addr>/current_month")
+def get_current_month(addr: int):
+    """Read current month energy (real-time accumulation, not frozen)."""
+    meter = get_meter(addr)
+    ser = get_serial()
+
+    if meter.meter_type == MeterType.ADL400:
+        abort(400, description="ADL400 does not support current month register")
+
+    fwd_kwh = None
+    rev_kwh = None
+
+    with ser.lock():
+        if meter.meter_type == MeterType.DJSF1352_RN_6:
+            fwd_reg, rev_reg = 12306, 12342
+        else:
+            fwd_reg, rev_reg = 2010, 2150
+
+        req = build_read_request(meter.slave_addr, fwd_reg, 2)
+        resp = ser.send_and_receive_unlocked(req)
+        data = parse_read_response(resp) if resp else None
+        if data:
+            fwd_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+
+        req = build_read_request(meter.slave_addr, rev_reg, 2)
+        resp = ser.send_and_receive_unlocked(req)
+        data = parse_read_response(resp) if resp else None
+        if data:
+            rev_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+
+    return jsonify({
+        "address": addr,
+        "name": meter.name,
+        "period": "current_month",
+        "energy_forward_kwh": round(fwd_kwh, 3) if fwd_kwh is not None else None,
+        "energy_reverse_kwh": round(rev_kwh, 3) if rev_kwh is not None else None,
+    })
+
+
 @app.get("/meter/<int:addr>/yearly")
 def get_yearly(addr: int):
     """Read yearly energy summary (aggregated from monthly data)."""

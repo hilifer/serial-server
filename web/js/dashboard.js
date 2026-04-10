@@ -289,10 +289,6 @@ function updateEnergyCards(){
 // 当月电量 = months[当前月份-1]，年电量 = total
 // 只查 DJSF 电表（ADL400 不支持月冻结）
 async function pollMonthlyYearly(){
-  // 月电量 = 上月冻结值（当月还没冻结）
-  const lastMonth = new Date().getMonth() - 1; // 0-based, -1=上月
-  const lastMonthIdx = lastMonth < 0 ? 11 : lastMonth;
-
   const tasks = [
     {addr:8,  monthEl:'dc1MonthE', yearEl:'dc1YearE', field:'forward'},
     {addr:9,  monthEl:'dc2MonthE', yearEl:'dc2YearE', field:'forward'},
@@ -302,34 +298,34 @@ async function pollMonthlyYearly(){
               monthEl2:'batDischargeMonth', yearEl2:'batDischargeYear', field2:'reverse'},
   ];
 
-  // 并行请求所有 yearly
+  // 并行：当月实时值 + 年合计
   const results = await Promise.all(tasks.map(async t => {
-    try { return {task:t, data:await getMeterYearly(t.addr)}; }
-    catch(e) { return {task:t, data:null}; }
+    let curMonth=null, yearly=null;
+    try { curMonth = await getMeterCurrentMonth(t.addr); } catch(e) {}
+    try { yearly = await getMeterYearly(t.addr); } catch(e) {}
+    return {task:t, curMonth, yearly};
   }));
 
-  for (const {task, data} of results) {
-    if (!data || !data.months) continue;
-    yearlyCache[task.addr]=data; // Cache for popup
-
-    // 当月电量：从 months 数组取当前月
-    const monthData = data.months[lastMonthIdx];
-    if (monthData) {
-      const monthVal = task.field === 'forward' ? monthData.energy_forward_kwh : monthData.energy_reverse_kwh;
-      setText(task.monthEl, fmt(monthVal, 1));
-      // 储能有第二个字段（放电）
+  for (const {task, curMonth, yearly} of results) {
+    // 当月电量：从 current_month API 取（实时累计值）
+    if (curMonth) {
+      const mVal = task.field === 'forward' ? curMonth.energy_forward_kwh : curMonth.energy_reverse_kwh;
+      setText(task.monthEl, fmt(mVal, 1));
       if (task.monthEl2 && task.field2) {
-        const monthVal2 = task.field2 === 'forward' ? monthData.energy_forward_kwh : monthData.energy_reverse_kwh;
-        setText(task.monthEl2, fmt(monthVal2, 1));
+        const mVal2 = task.field2 === 'forward' ? curMonth.energy_forward_kwh : curMonth.energy_reverse_kwh;
+        setText(task.monthEl2, fmt(mVal2, 1));
       }
     }
 
-    // 年电量：从 total 取
-    const yearVal = task.field === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
-    setText(task.yearEl, fmt(yearVal, 1));
-    if (task.yearEl2 && task.field2) {
-      const yearVal2 = task.field2 === 'forward' ? data.total_forward_kwh : data.total_reverse_kwh;
-      setText(task.yearEl2, fmt(yearVal2, 1));
+    // 年电量：从 yearly API 取
+    if (yearly && yearly.months) {
+      yearlyCache[task.addr] = yearly;
+      const yVal = task.field === 'forward' ? yearly.total_forward_kwh : yearly.total_reverse_kwh;
+      setText(task.yearEl, fmt(yVal, 1));
+      if (task.yearEl2 && task.field2) {
+        const yVal2 = task.field2 === 'forward' ? yearly.total_forward_kwh : yearly.total_reverse_kwh;
+        setText(task.yearEl2, fmt(yVal2, 1));
+      }
     }
   }
 }
@@ -406,11 +402,35 @@ async function pollAllMeters(){
   updateFlowLabels();
 }
 
+// Timer management
+const timers=[];
+function addTimer(fn,ms){
+  fn(); // Run immediately on enter
+  const id=setInterval(fn,ms);
+  timers.push(id);
+  return id;
+}
+function clearAllTimers(){
+  timers.forEach(id=>clearInterval(id));
+  timers.length=0;
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
-  updateDashClock();setInterval(updateDashClock,1000);
+  addTimer(updateDashClock,1000);
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  startPolling(pollAllMeters,60000);       // 实时数据：1分钟
-  startPolling(pollMonthlyYearly,600000);  // 月/年数据：10分钟
+  addTimer(pollAllMeters,60000);       // 实时数据：1分钟
+  addTimer(pollMonthlyYearly,600000);  // 月/年数据：10分钟
+});
+
+// Clear timers on page exit
+window.addEventListener('beforeunload',clearAllTimers);
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) clearAllTimers();
+  else{
+    addTimer(updateDashClock,1000);
+    addTimer(pollAllMeters,60000);
+    addTimer(pollMonthlyYearly,600000);
+  }
 });
