@@ -410,18 +410,23 @@ function showMonthlyPopup(e,addr,field){
   let total=0;
   let rows='';
   const curMonthIdx=new Date().getMonth(); // 0-based
-  data.months.forEach((m,i)=>{
-    const v=isReverse?m.energy_reverse_kwh:m.energy_forward_kwh;
-    const fv=v!==null&&v!==undefined?Number(v).toFixed(1):'--';
-    if(v)total+=v;
-    rows+=`<tr><td>${monthNames[i]}</td><td class="val">${fv} kWh</td></tr>`;
-  });
-  // 当月实时值
   const curMonth=allMeterData[addr]&&allMeterData[addr].current_month;
   const curVal=curMonth?(isReverse?curMonth.energy_reverse_kwh:curMonth.energy_forward_kwh):null;
-  const curFv=curVal!==null&&curVal!==undefined?Number(curVal).toFixed(1):'--';
-  if(curVal)total+=curVal;
-  rows+=`<tr style="color:#00d4ff"><td>${monthNames[curMonthIdx]}(当月)</td><td class="val" style="color:#00d4ff">${curFv} kWh</td></tr>`;
+
+  data.months.forEach((m,i)=>{
+    let v=isReverse?m.energy_reverse_kwh:m.energy_forward_kwh;
+    let isCur=false;
+    // 当前月：用实时值替换冻结值
+    if(i===curMonthIdx&&curVal!==null&&curVal!==undefined){
+      v=curVal;
+      isCur=true;
+    }
+    const fv=v!==null&&v!==undefined?Number(v).toFixed(1):'--';
+    if(v)total+=v;
+    const style=isCur?' style="color:#00d4ff"':'';
+    const label=isCur?monthNames[i]+'(当月)':monthNames[i];
+    rows+=`<tr${style}><td>${label}</td><td class="val"${style}>${fv} kWh</td></tr>`;
+  });
 
   const popup=document.createElement('div');
   popup.className='monthly-popup';
