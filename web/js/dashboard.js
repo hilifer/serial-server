@@ -495,8 +495,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  addTimer(pollAllMeters,60000);   // 实时+当月：立即读，之后1分钟
-  pollYearly();                     // 年数据：只读一次（一个月才变）
+  addTimer(pollAllMeters,60000);       // 实时+当月：1分钟
+  addTimer(pollYearly,3600000);        // 年数据：1小时
 });
 
 window.addEventListener('beforeunload',clearAllTimers);
@@ -505,5 +505,6 @@ document.addEventListener('visibilitychange',()=>{
   else{
     addTimer(updateDashClock,1000);
     addTimer(pollAllMeters,60000);
+    addTimer(pollYearly,3600000);
   }
 });
