@@ -53,7 +53,7 @@ echo   按 Ctrl+C 停止
 echo ============================================
 
 REM Background: wait for service ready, check serial, then open browser
-start "" /B cmd /c "timeout /t 5 /nobreak >nul && powershell -Command \"try { $r = Invoke-WebRequest -Uri 'http://localhost:8000/status' -TimeoutSec 3 -UseBasicParsing; $j = $r.Content ^| ConvertFrom-Json; foreach($p in $j.ports.PSObject.Properties) { if($p.Value.status -ne 'connected') { [System.Windows.Forms.MessageBox]::Show($p.Name + ' 串口未连接: ' + $p.Value.last_error, '串口警告', 'OK', 'Warning') } } } catch { }\" 2>nul && start chrome --start-fullscreen http://localhost:8000/ 2>nul || start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/"
+start "" /B cmd /c "timeout /t 5 /nobreak >nul && start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/"
 
 REM Server runs in foreground (Ctrl+C to stop)
 python server.py
