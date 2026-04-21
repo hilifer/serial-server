@@ -39,13 +39,11 @@ serial_ports:
 
 # BMS (battery management system) over Modbus TCP
 # SOC is read at function code 0x03 from register `soc_addr` (1 register, %).
-# `capacity_kwh` converts SOC % to current energy in kWh for UI display.
 bms:
   host: "10.6.120.10"
   port: 502
   unit: 5
   soc_addr: 304
-  capacity_kwh: 100
   timeout: 2.0
   cache_ttl: 5.0
 

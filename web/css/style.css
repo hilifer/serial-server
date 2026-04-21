@@ -269,15 +269,14 @@ a{color:inherit;text-decoration:none}
   pointer-events:none;
 }
 @keyframes battSheen{0%{left:-100%}50%,100%{left:100%}}
-.battery-info{flex:1;display:flex;flex-direction:column;gap:clamp(4px,.6vh,10px)}
-.battery-row{display:flex;justify-content:space-between;align-items:baseline}
-.battery-label{font-size:clamp(10px,1vw,13px);color:rgba(255,255,255,.65)}
-.battery-value{
-  font-size:clamp(16px,2vw,24px);font-weight:bold;color:#00ffff;
-  text-shadow:0 0 8px rgba(0,255,255,.5);
-  display:inline-flex;align-items:baseline;gap:2px;
+.battery-info{flex:1;display:flex;flex-direction:column;justify-content:center;gap:clamp(4px,.6vh,10px)}
+.battery-info .battery-label{font-size:clamp(11px,1.1vw,14px);color:rgba(255,255,255,.7);letter-spacing:.04em}
+.battery-soc-big{
+  font-size:clamp(32px,4vw,54px);font-weight:bold;color:#00ffff;
+  text-shadow:0 0 14px rgba(0,255,255,.55);
+  display:inline-flex;align-items:baseline;gap:4px;line-height:1;
 }
-.battery-unit{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.7);text-shadow:none;font-weight:normal}
+.battery-unit{font-size:clamp(11px,1.1vw,15px);color:rgba(255,255,255,.75);text-shadow:none;font-weight:normal}
 
 /* Left column: 3 cards */
 .dash-col:nth-child(1)>.panel-card:nth-child(1){flex:1} /* 电网购电 */

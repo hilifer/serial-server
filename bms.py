@@ -16,13 +16,12 @@ logger = logging.getLogger("bms")
 
 class BMSReader:
     def __init__(self, host: str, port: int = 502, unit: int = 5,
-                 soc_addr: int = 304, capacity_kwh: float = 100.0,
-                 timeout: float = 2.0, cache_ttl: float = 5.0):
+                 soc_addr: int = 304, timeout: float = 2.0,
+                 cache_ttl: float = 5.0):
         self.host = host
         self.port = port
         self.unit = unit
         self.soc_addr = soc_addr
-        self.capacity_kwh = capacity_kwh
         self.timeout = timeout
         self.cache_ttl = cache_ttl
 

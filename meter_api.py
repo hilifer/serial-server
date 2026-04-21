@@ -78,12 +78,11 @@ def init_bms(cfg: dict) -> None:
         port=int(b.get("port", 502)),
         unit=int(b.get("unit", 5)),
         soc_addr=int(b.get("soc_addr", 304)),
-        capacity_kwh=float(b.get("capacity_kwh", 100.0)),
         timeout=float(b.get("timeout", 2.0)),
         cache_ttl=float(b.get("cache_ttl", 5.0)),
     )
-    logger.info("BMS configured: %s:%d unit=%d capacity=%.1fkWh",
-                _bms.host, _bms.port, _bms.unit, _bms.capacity_kwh)
+    logger.info("BMS configured: %s:%d unit=%d reg=%d",
+                _bms.host, _bms.port, _bms.unit, _bms.soc_addr)
 
 
 @app.route("/")
@@ -186,21 +185,14 @@ def list_meters():
 def battery_soc():
     """Read battery SOC from the BMS over Modbus TCP.
 
-    Returns: {ok, soc_pct, current_energy_kwh, capacity_kwh}.
-    503 if the BMS is unconfigured or unreachable.
+    Returns: {ok, soc_pct}. 503 if BMS is unconfigured or unreachable.
     """
     if _bms is None:
         abort(503, description="BMS 未配置 (config.yaml 中缺少 bms.host)")
     soc = _bms.read_soc()
     if soc is None:
         abort(503, description=f"读取 BMS 失败: {_bms.last_error or 'unknown'}")
-    soc_pct = max(0, min(100, int(soc)))
-    return jsonify({
-        "ok": True,
-        "soc_pct": soc_pct,
-        "current_energy_kwh": round(soc_pct * _bms.capacity_kwh / 100.0, 2),
-        "capacity_kwh": _bms.capacity_kwh,
-    })
+    return jsonify({"ok": True, "soc_pct": max(0, min(100, int(soc)))})
 
 
 @app.get("/meter/<int:addr>/realtime")

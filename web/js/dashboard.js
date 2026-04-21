@@ -500,12 +500,10 @@ function clearAllTimers(){
 
 async function pollBatterySoc(){
   const fill=document.getElementById('batteryFill');
-  const socEl=document.getElementById('batterySoc');
   const pctEl=document.getElementById('batterySocPct');
   const d=await fetchJSON('/battery/soc');
   if(!d||!d.ok){
-    if(fill)fill.style.setProperty('--soc','0%');
-    if(socEl)socEl.innerHTML='--<span class="battery-unit">kWh</span>';
+    if(fill){fill.style.setProperty('--soc','0%');fill.classList.remove('low','medium');}
     if(pctEl)pctEl.innerHTML='--<span class="battery-unit">%</span>';
     return;
   }
@@ -516,7 +514,6 @@ async function pollBatterySoc(){
     if(pct<20)fill.classList.add('low');
     else if(pct<50)fill.classList.add('medium');
   }
-  if(socEl)socEl.innerHTML=fmt(d.current_energy_kwh,1)+'<span class="battery-unit">kWh</span>';
   if(pctEl)pctEl.innerHTML=pct+'<span class="battery-unit">%</span>';
 }
 
