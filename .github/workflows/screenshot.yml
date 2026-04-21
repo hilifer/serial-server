@@ -1,0 +1,116 @@
+name: UI Screenshot
+
+on:
+  push:
+    branches:
+      - claude/festive-edison-W15j9
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install OS dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mosquitto mosquitto-clients socat
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Create virtual serial ports
+        run: |
+          mkdir -p /tmp/tty
+          socat -d -d pty,raw,echo=0,link=/tmp/tty/31A pty,raw,echo=0,link=/tmp/tty/31B &
+          socat -d -d pty,raw,echo=0,link=/tmp/tty/32A pty,raw,echo=0,link=/tmp/tty/32B &
+          socat -d -d pty,raw,echo=0,link=/tmp/tty/33A pty,raw,echo=0,link=/tmp/tty/33B &
+          sleep 2
+          ls -la /tmp/tty/
+
+      - name: Patch config.yaml (runner only, not committed)
+        run: |
+          sed -i 's|port: "COM31"|port: "/tmp/tty/31A"|;
+                  s|port: "COM32"|port: "/tmp/tty/32A"|;
+                  s|port: "COM33"|port: "/tmp/tty/33A"|' config.yaml
+          grep 'port:' config.yaml
+
+      - name: Configure and start Mosquitto (WebSocket)
+        run: |
+          cat > /tmp/mosquitto.conf <<EOF
+          listener 1883
+          protocol mqtt
+          allow_anonymous true
+
+          listener 9001
+          protocol websockets
+          allow_anonymous true
+
+          persistence false
+          log_dest stdout
+          EOF
+          sudo systemctl stop mosquitto || true
+          mosquitto -c /tmp/mosquitto.conf -d
+          sleep 1
+
+      - name: Start serial-server
+        run: |
+          nohup python server.py > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/meters > /dev/null; then
+              echo "Server is up"
+              break
+            fi
+            sleep 1
+          done
+          tail -30 /tmp/server.log || true
+
+      - name: Take screenshots with Playwright (real Chromium)
+        run: |
+          mkdir -p screenshots
+          python <<'PY'
+          import asyncio
+          from playwright.async_api import async_playwright
+
+          async def main():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch()
+                  ctx = await browser.new_context(viewport={'width': 1920, 'height': 1080})
+                  page = await ctx.new_page()
+
+                  await page.goto('http://127.0.0.1:8000/', wait_until='networkidle')
+                  await page.wait_for_timeout(3000)
+                  await page.screenshot(path='screenshots/index.png', full_page=False)
+
+                  await page.goto('http://127.0.0.1:8000/detail.html', wait_until='networkidle')
+                  await page.wait_for_timeout(5000)
+                  await page.screenshot(path='screenshots/detail.png', full_page=False)
+
+                  await browser.close()
+
+          asyncio.run(main())
+          PY
+          ls -la screenshots/
+
+      - name: Stop server
+        if: always()
+        run: |
+          kill $(cat /tmp/server.pid) 2>/dev/null || true
+          tail -50 /tmp/server.log || true
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/*.png
+          if-no-files-found: error
