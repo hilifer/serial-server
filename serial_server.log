@@ -1,0 +1,67 @@
+[2026-04-21 03:03:19] WARNING serial-manager - [COM31] Failed to open: [Errno 2] could not open port COM31: [Errno 2] No such file or directory: 'COM31'
+[2026-04-21 03:03:19] WARNING serial-server - SerialManager [COM31] (COM31): unavailable, will auto-reconnect
+[2026-04-21 03:03:19] INFO    serial-manager - [COM31] Attempting reconnect...
+[2026-04-21 03:03:19] WARNING serial-manager - [COM31] Failed to open: [Errno 2] could not open port COM31: [Errno 2] No such file or directory: 'COM31'
+[2026-04-21 03:03:19] WARNING serial-manager - [COM32] Failed to open: [Errno 2] could not open port COM32: [Errno 2] No such file or directory: 'COM32'
+[2026-04-21 03:03:19] WARNING serial-server - SerialManager [COM32] (COM32): unavailable, will auto-reconnect
+[2026-04-21 03:03:19] INFO    serial-manager - [COM32] Attempting reconnect...
+[2026-04-21 03:03:19] WARNING serial-manager - [COM32] Failed to open: [Errno 2] could not open port COM32: [Errno 2] No such file or directory: 'COM32'
+[2026-04-21 03:03:19] WARNING serial-manager - [COM33] Failed to open: [Errno 2] could not open port COM33: [Errno 2] No such file or directory: 'COM33'
+[2026-04-21 03:03:19] WARNING serial-server - SerialManager [COM33] (COM33): unavailable, will auto-reconnect
+[2026-04-21 03:03:19] INFO    serial-manager - [COM33] Attempting reconnect...
+[2026-04-21 03:03:19] WARNING serial-manager - [COM33] Failed to open: [Errno 2] could not open port COM33: [Errno 2] No such file or directory: 'COM33'
+[2026-04-21 03:03:19] INFO    serial-server - Connecting to MQTT broker at ws://localhost:9001 ...
+[2026-04-21 03:03:19] WARNING serial-server - MQTT connection failed: [Errno 111] Connection refused (API service will still run)
+[2026-04-21 03:03:19] INFO    serial-server - Starting API service on http://0.0.0.0:8000 ...
+[2026-04-21 03:03:19] INFO    werkzeug - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://10.1.1.15:8000
+[2026-04-21 03:03:19] INFO    werkzeug - [33mPress CTRL+C to quit[0m
+[2026-04-21 03:03:20] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:20] "GET /meters HTTP/1.1" 200 -
+[2026-04-21 03:03:20] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:20] "GET /meters HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET / HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /css/style.css HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /images/base.jpg HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /js/api.js HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /js/parking.js HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /parking/status HTTP/1.1" 200 -
+[2026-04-21 03:03:21] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:21] "GET /images/car.png HTTP/1.1" 200 -
+[2026-04-21 03:03:22] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:22] "GET /charging/piles HTTP/1.1" 200 -
+[2026-04-21 03:03:23] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:23] "GET /charging/guns HTTP/1.1" 200 -
+[2026-04-21 03:03:24] INFO    serial-manager - [COM31] Attempting reconnect...
+[2026-04-21 03:03:24] WARNING serial-manager - [COM31] Failed to open: [Errno 2] could not open port COM31: [Errno 2] No such file or directory: 'COM31'
+[2026-04-21 03:03:24] INFO    serial-manager - [COM32] Attempting reconnect...
+[2026-04-21 03:03:24] WARNING serial-manager - [COM32] Failed to open: [Errno 2] could not open port COM32: [Errno 2] No such file or directory: 'COM32'
+[2026-04-21 03:03:24] INFO    serial-manager - [COM33] Attempting reconnect...
+[2026-04-21 03:03:24] WARNING serial-manager - [COM33] Failed to open: [Errno 2] could not open port COM33: [Errno 2] No such file or directory: 'COM33'
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "GET /detail.html HTTP/1.1" 200 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "GET /js/dashboard.js HTTP/1.1" 200 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[36mGET /js/api.js HTTP/1.1[0m" 304 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[36mGET /css/style.css HTTP/1.1[0m" 304 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/1/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/3/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/4/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/5/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/6/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/2/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/8/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/9/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/10/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/8/yearly HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/9/yearly HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/11/realtime HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/10/yearly HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/6/yearly HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:26] INFO    werkzeug - 127.0.0.1 - - [21/Apr/2026 03:03:26] "[35m[1mGET /meter/11/yearly HTTP/1.1[0m" 503 -
+[2026-04-21 03:03:29] INFO    serial-manager - [COM31] Attempting reconnect...
+[2026-04-21 03:03:29] INFO    serial-manager - [COM32] Attempting reconnect...
+[2026-04-21 03:03:29] WARNING serial-manager - [COM32] Failed to open: [Errno 2] could not open port COM32: [Errno 2] No such file or directory: 'COM32'
+[2026-04-21 03:03:29] WARNING serial-manager - [COM31] Failed to open: [Errno 2] could not open port COM31: [Errno 2] No such file or directory: 'COM31'
+[2026-04-21 03:03:29] INFO    serial-manager - [COM33] Attempting reconnect...
+[2026-04-21 03:03:29] WARNING serial-manager - [COM33] Failed to open: [Errno 2] could not open port COM33: [Errno 2] No such file or directory: 'COM33'
+[2026-04-21 03:03:32] INFO    serial-server - Stopping MQTT bridge...
+[2026-04-21 03:03:32] INFO    serial-server - [COM31] Bridge stopped
+[2026-04-21 03:03:32] INFO    serial-server - [COM32] Bridge stopped
+[2026-04-21 03:03:32] INFO    serial-server - [COM33] Bridge stopped
+[2026-04-21 03:03:32] INFO    serial-server - MQTT bridge stopped.
