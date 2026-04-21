@@ -295,11 +295,12 @@ a{color:inherit;text-decoration:none}
 @keyframes dashRev{0%{stroke-dashoffset:0}100%{stroke-dashoffset:12}}
 .flow-edge.fast{animation-duration:.4s}
 .flow-edge.slow{animation-duration:1.5s}
-.flow-edge.idle{animation:none;stroke:#2a4a6a;stroke-dasharray:5 5;opacity:.5}
-/* All flow lines use same blue color */
-.flow-edge.solar,.flow-edge.storage,.flow-edge.grid-line,.flow-edge.office-line{stroke:#3b82f6}
-.flow-edge.charge-dc{stroke:#ef4444}
-.flow-edge.charge-ac{stroke:#22c55e}
+.flow-edge.idle{animation:none;opacity:.6;stroke-dasharray:none}
+.flow-edge.dashed{stroke-dasharray:none;stroke-width:2}
+/* DC (red, thick solid) */
+.flow-edge.solar,.flow-edge.storage,.flow-edge.charge-dc{stroke:#ef4444;stroke-width:3}
+/* AC (green, thin solid) — thinner so still visually distinct from DC */
+.flow-edge.grid-line,.flow-edge.office-line,.flow-edge.charge-ac{stroke:#22c55e;stroke-width:2}
 
 /* Monthly detail popup */
 .monthly-popup{
