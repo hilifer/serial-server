@@ -37,6 +37,14 @@ serial_ports:
     timeout: 0.1
     mqtt_topic_prefix: "serial/com33"
 
+# Background data caches — keep the latest meter/parking values in
+# memory so API endpoints respond in <1ms instead of holding the serial
+# bus on every request.
+cache:
+  meter_interval: 2.0     # seconds between full 10-meter scan passes
+  parking_interval: 2.0   # seconds between full 54-space scan passes
+  odoo_ttl: 5.0           # /charging/* Odoo responses cached this long
+
 # BMS (battery management system) over Modbus TCP
 # SOC is read at function code 0x03 from register `soc_addr` (1 register, %).
 bms:

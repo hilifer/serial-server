@@ -522,7 +522,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  addTimer(pollAllMeters,60000);       // 实时+当月：1分钟
+  addTimer(pollAllMeters,5000);        // 实时+当月：5秒（后端走缓存）
   addTimer(pollYearly,3600000);        // 年数据：1小时
   addTimer(pollBatterySoc,10000);      // 电池SOC：10秒
 });
@@ -533,7 +533,7 @@ document.addEventListener('visibilitychange',()=>{
   else{
     clearAllTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
     addTimer(updateDashClock,1000);
-    addTimer(pollAllMeters,60000);
+    addTimer(pollAllMeters,5000);
     addTimer(pollYearly,3600000);
     addTimer(pollBatterySoc,10000);
   }

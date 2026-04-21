@@ -301,8 +301,12 @@ def main():
     mqtt_server.start()
 
     # 3. Import and start Flask API (blocking)
-    from meter_api import app, init_bms
+    from meter_api import app, init_bms, init_meter_cache, init_parking_cache, init_odoo_cache
     init_bms(config)
+    cache_cfg = config.get("cache", {})
+    init_meter_cache(scan_interval_s=float(cache_cfg.get("meter_interval", 2.0)))
+    init_parking_cache(scan_interval_s=float(cache_cfg.get("parking_interval", 2.0)))
+    init_odoo_cache(ttl_s=float(cache_cfg.get("odoo_ttl", 5.0)))
 
     def _signal_handler(sig, frame):
         print("\n正在关闭...")

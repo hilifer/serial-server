@@ -270,8 +270,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCars();
   renderPiles();
 
-  addParkTimer(pollParking, 30000);
-  addParkTimer(pollGuns, 30000);
+  addParkTimer(pollParking, 3000);     // 车位状态：3秒（后端走缓存）
+  addParkTimer(pollGuns, 5000);        // 充电枪：5秒（后端 Odoo TTL 5秒）
   pollPiles();
 });
 
@@ -280,7 +280,7 @@ document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearParkTimers();
   else{
     clearParkTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
-    addParkTimer(pollParking, 30000);
-    addParkTimer(pollGuns, 30000);
+    addParkTimer(pollParking, 3000);
+    addParkTimer(pollGuns, 5000);
   }
 });

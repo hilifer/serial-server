@@ -43,6 +43,9 @@ from parking import (
 )
 
 from bms import BMSReader
+from meter_cache import MeterCache
+from parking_cache import ParkingCache
+from odoo_cache import OdooCache
 
 import os
 import sys
@@ -62,8 +65,54 @@ def _get_base_dir():
 web_dir = os.path.join(_get_base_dir(), "web")
 app = Flask(__name__, static_folder=web_dir, static_url_path="")
 
-# BMS reader — initialized by server.py via init_bms(cfg)
+# Caches — initialized by server.py via init_caches(cfg) after serial managers are up.
 _bms: "BMSReader | None" = None
+_meter_cache: "MeterCache | None" = None
+_parking_cache: "ParkingCache | None" = None
+_odoo_cache: "OdooCache | None" = None
+
+
+def init_meter_cache(scan_interval_s: float = 2.0) -> None:
+    global _meter_cache
+    def provider():
+        from state import serial_managers
+        return serial_managers.get("COM33")
+    _meter_cache = MeterCache(
+        meter_list=METERS,
+        reader_fn=_read_meter_realtime,
+        serial_mgr_provider=provider,
+        scan_interval_s=scan_interval_s,
+    )
+    _meter_cache.start()
+    logger.info("MeterCache started (%d meters, scan_interval=%.1fs)",
+                len(METERS), scan_interval_s)
+
+
+def init_parking_cache(scan_interval_s: float = 2.0) -> None:
+    global _parking_cache
+    by_port: dict[str, list] = {}
+    for s in PARKING_SPACES:
+        by_port.setdefault(s.com_port, []).append(s)
+
+    def provider(com_port: str):
+        from state import serial_managers
+        return serial_managers.get(com_port)
+
+    _parking_cache = ParkingCache(
+        spaces_by_port=by_port,
+        poll_fn=_poll_space_status,
+        serial_mgr_provider=provider,
+        scan_interval_s=scan_interval_s,
+    )
+    _parking_cache.start()
+    logger.info("ParkingCache started (%d spaces across %d ports)",
+                len(PARKING_SPACES), len(by_port))
+
+
+def init_odoo_cache(ttl_s: float = 5.0) -> None:
+    global _odoo_cache
+    _odoo_cache = OdooCache(ttl_s=ttl_s)
+    logger.info("OdooCache enabled (ttl=%.1fs)", ttl_s)
 
 
 def init_bms(cfg: dict) -> None:
@@ -195,14 +244,12 @@ def battery_soc():
     return jsonify({"ok": True, "soc_pct": max(0, min(100, int(soc)))})
 
 
-@app.get("/meter/<int:addr>/realtime")
-def get_realtime(addr: int):
-    """Read all realtime parameters from a meter."""
-    meter = get_meter(addr)
-    ser = get_serial()
-
+def _read_meter_realtime(ser, meter) -> dict:
+    """Do a full realtime scan of one meter. Holds ser.lock() for the entire
+    register burst so other callers don't interleave. Used both by the
+    /realtime endpoint (fallback) and by MeterCache's background thread.
+    """
     results = {}
-
     regs = get_realtime_regs(meter.meter_type)
 
     with ser.lock():
@@ -239,14 +286,30 @@ def get_realtime(addr: int):
             }
 
     resp = {
-        "address": addr,
+        "address": meter.slave_addr,
         "name": meter.name,
         "model": meter.model,
         "data": results,
     }
     if current_month:
         resp["current_month"] = current_month
-    return jsonify(resp)
+    return resp
+
+
+@app.get("/meter/<int:addr>/realtime")
+def get_realtime(addr: int):
+    """Read all realtime parameters from a meter (served from MeterCache)."""
+    meter = get_meter(addr)
+    if _meter_cache is not None:
+        entry = _meter_cache.get(addr)
+        if entry and entry.get("payload"):
+            resp = dict(entry["payload"])
+            resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
+            resp["last_error"] = entry.get("error")
+            return jsonify(resp)
+        # Cache not warmed yet — fall through to direct read on first request.
+    ser = get_serial()
+    return jsonify(_read_meter_realtime(ser, meter))
 
 
 @app.get("/meter/<int:addr>/daily")
@@ -556,10 +619,17 @@ def _odoo_call(model, method, domain, fields=None):
     return None
 
 
+def _odoo_call_cached(*args, **kwargs):
+    """Wrap _odoo_call with OdooCache if enabled; otherwise call through."""
+    if _odoo_cache is not None:
+        return _odoo_cache.get_or_fetch(_odoo_call, *args, **kwargs)
+    return _odoo_call(*args, **kwargs)
+
+
 @app.get("/charging/piles")
 def get_charging_piles():
-    """Proxy to Odoo: list charging piles."""
-    data = _odoo_call(
+    """Proxy to Odoo: list charging piles (via OdooCache)."""
+    data = _odoo_call_cached(
         "pile.charge_server", "search_read",
         [["station_id", "=", 3]],
         ["id", "name", "pile_code", "pile_type", "gun_count", "status",
@@ -572,8 +642,8 @@ def get_charging_piles():
 
 @app.get("/charging/guns")
 def get_charging_guns():
-    """Proxy to Odoo: list charging guns with status."""
-    data = _odoo_call(
+    """Proxy to Odoo: list charging guns with status (via OdooCache)."""
+    data = _odoo_call_cached(
         "gun.charge_server", "search_read",
         [["station_id", "=", 3]],
         ["id", "gun_code", "gun_number", "gun_type", "status", "pile_id",
@@ -621,34 +691,49 @@ def list_parking_spaces():
 
 @app.get("/parking/status")
 def get_all_parking_status():
-    """Poll parking spaces. Query: ?zone=A or ?zone=B"""
-    from state import serial_managers
+    """Return parking space status (from ParkingCache). Query: ?zone=A or ?zone=B"""
     zone = request.args.get("zone", "").upper()
 
-    spaces = PARKING_SPACES
-    if zone:
-        spaces = [s for s in spaces if s.zone == zone]
-
-    results = []
-    by_port: dict[str, list] = {}
-    for s in spaces:
-        by_port.setdefault(s.com_port, []).append(s)
-
-    for com_port, port_spaces in by_port.items():
-        mgr = serial_managers.get(com_port)
-        if mgr is None or not mgr.is_open:
-            for s in port_spaces:
-                results.append({"space_id": s.space_id, "zone": s.zone,
-                                "status": None, "label": "offline"})
-            continue
-
-        with mgr.lock():
-            for s in port_spaces:
-                val, label = _poll_space_status(mgr, s)
-                results.append({
-                    "space_id": s.space_id, "zone": s.zone,
-                    "status": val, "label": label,
-                })
+    if _parking_cache is not None:
+        all_entries = _parking_cache.get_all()
+        if not all_entries:
+            # Cache hasn't populated yet — return all as offline so UI can render
+            all_entries = [
+                {"space_id": s.space_id, "zone": s.zone,
+                 "status": None, "label": "warming_up", "ts": 0}
+                for s in PARKING_SPACES
+            ]
+        if zone:
+            all_entries = [e for e in all_entries if e.get("zone") == zone]
+        results = [
+            {"space_id": e["space_id"], "zone": e["zone"],
+             "status": e.get("status"), "label": e.get("label") or "offline"}
+            for e in all_entries
+        ]
+    else:
+        # Fallback: direct read (should not happen in normal operation)
+        from state import serial_managers
+        spaces = PARKING_SPACES
+        if zone:
+            spaces = [s for s in spaces if s.zone == zone]
+        results = []
+        by_port: dict[str, list] = {}
+        for s in spaces:
+            by_port.setdefault(s.com_port, []).append(s)
+        for com_port, port_spaces in by_port.items():
+            mgr = serial_managers.get(com_port)
+            if mgr is None or not mgr.is_open:
+                for s in port_spaces:
+                    results.append({"space_id": s.space_id, "zone": s.zone,
+                                    "status": None, "label": "offline"})
+                continue
+            with mgr.lock():
+                for s in port_spaces:
+                    val, label = _poll_space_status(mgr, s)
+                    results.append({
+                        "space_id": s.space_id, "zone": s.zone,
+                        "status": val, "label": label,
+                    })
 
     results.sort(key=lambda r: r["space_id"])
     online = [r for r in results if r["status"] is not None]
