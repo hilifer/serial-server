@@ -46,6 +46,7 @@ from bms import BMSReader
 from meter_cache import MeterCache
 from parking_cache import ParkingCache
 from odoo_cache import OdooCache
+from yearly_cache import YearlyCache
 
 import os
 import sys
@@ -70,6 +71,7 @@ _bms: "BMSReader | None" = None
 _meter_cache: "MeterCache | None" = None
 _parking_cache: "ParkingCache | None" = None
 _odoo_cache: "OdooCache | None" = None
+_yearly_cache: "YearlyCache | None" = None
 
 
 def init_meter_cache(scan_interval_s: float = 2.0) -> None:
@@ -113,6 +115,22 @@ def init_odoo_cache(ttl_s: float = 5.0) -> None:
     global _odoo_cache
     _odoo_cache = OdooCache(ttl_s=ttl_s)
     logger.info("OdooCache enabled (ttl=%.1fs)", ttl_s)
+
+
+def init_yearly_cache(refresh_interval_s: float = 3600.0) -> None:
+    global _yearly_cache
+    def provider():
+        from state import serial_managers
+        return serial_managers.get("COM33")
+    _yearly_cache = YearlyCache(
+        meter_list=METERS,
+        reader_fn=_read_meter_yearly,
+        serial_mgr_provider=provider,
+        refresh_interval_s=refresh_interval_s,
+    )
+    _yearly_cache.start()
+    logger.info("YearlyCache started (%d meters, refresh=%.0fs)",
+                len(METERS), refresh_interval_s)
 
 
 def init_bms(cfg: dict) -> None:
@@ -467,12 +485,13 @@ def get_current_month(addr: int):
     })
 
 
-@app.get("/meter/<int:addr>/yearly")
-def get_yearly(addr: int):
-    """Read yearly energy summary (aggregated from monthly data)."""
-    meter = get_meter(addr)
-    ser = get_serial()
+def _read_meter_yearly(ser, meter) -> dict:
+    """Heavy read: walks all 12 months of frozen energy data on this meter.
 
+    Extracted from /meter/{addr}/yearly so both the endpoint (cold-start
+    fallback) and YearlyCache can share the same logic. Holds ser.lock()
+    for the whole duration so the 12-month scan is atomic.
+    """
     if meter.meter_type == MeterType.ADL400:
         monthly_data = []
         total_energy = 0.0
@@ -493,14 +512,14 @@ def get_yearly(addr: int):
                     monthly_data.append(block)
                     total_energy += block["energy_active_total_kwh"]
 
-        return jsonify({
-            "address": addr,
+        return {
+            "address": meter.slave_addr,
             "name": meter.name,
             "model": meter.model,
             "period": "yearly",
             "total_energy_kwh": round(total_energy, 2),
             "months": monthly_data,
-        })
+        }
     else:
         total_fwd = 0.0
         total_rev = 0.0
@@ -511,9 +530,6 @@ def get_yearly(addr: int):
             for m in range(1, 13):
                 fwd_kwh = None
                 rev_kwh = None
-
-                # Only months < current month are this year's data
-                # months >= current month are last year's (rolling storage)
                 is_this_year = m < current_month
 
                 req_fwd = build_monthly_history_request_djsf(
@@ -543,15 +559,31 @@ def get_yearly(addr: int):
                     "is_this_year": is_this_year,
                 })
 
-        return jsonify({
-            "address": addr,
+        return {
+            "address": meter.slave_addr,
             "name": meter.name,
             "model": meter.model,
             "period": "yearly",
             "total_forward_kwh": round(total_fwd, 2),
             "total_reverse_kwh": round(total_rev, 2),
             "months": months,
-        })
+        }
+
+
+@app.get("/meter/<int:addr>/yearly")
+def get_yearly(addr: int):
+    """Read yearly energy summary — served from YearlyCache when available."""
+    meter = get_meter(addr)
+    if _yearly_cache is not None:
+        entry = _yearly_cache.get(addr)
+        if entry and entry.get("payload"):
+            resp = dict(entry["payload"])
+            resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
+            resp["last_error"] = entry.get("error")
+            return jsonify(resp)
+        # Cache cold — fall through to direct read.
+    ser = get_serial()
+    return jsonify(_read_meter_yearly(ser, meter))
 
 
 # ===========================================================================

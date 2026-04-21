@@ -44,6 +44,7 @@ cache:
   meter_interval: 2.0     # seconds between full 10-meter scan passes
   parking_interval: 2.0   # seconds between full 54-space scan passes
   odoo_ttl: 5.0           # /charging/* Odoo responses cached this long
+  yearly_refresh: 3600.0  # seconds between full yearly energy refresh (1h)
 
 # BMS (battery management system) over Modbus TCP
 # SOC is read at function code 0x03 from register `soc_addr` (1 register, %).
