@@ -51,9 +51,9 @@ function renderFlowDiagram(){
     pv2:    {x:CX+d2,y:topY,icon:'☀️',name:'光伏2',bc:'#ff9500',lc:'#ffdd55',r:R},
     storage:{x:CX+d1,y:topY,icon:'🔋',name:'储能',bc:'#00ffff',lc:'#88ffff',r:R},
     center: {x:CX,y:midY,name:'光储系统',bc:'#3b82f6',isRect:true},
-    dc:     {x:CX-d3,y:botY,icon:'🚗',name:'直流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
+    office: {x:CX-d3,y:botY,icon:'💻',name:'办公室',bc:'#4ecdc4',lc:'#bbddff',r:RB},
     ac:     {x:CX,y:botY,icon:'🚗',name:'交流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
-    office: {x:CX+d3,y:botY,icon:'💻',name:'办公室',bc:'#4ecdc4',lc:'#bbddff',r:RB},
+    dc:     {x:CX+d3,y:botY,icon:'🚗',name:'直流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
   };
 
   function gridPath(){
@@ -83,8 +83,8 @@ function renderFlowDiagram(){
     {id:'ePv1',path:pvPath(N.pv1),type:'solar',pk:'pv1'},
     {id:'ePv2',path:pvPath(N.pv2),type:'solar',pk:'pv2'},
     {id:'eStor',path:storagePath(),type:'storage',pk:'storage',bidir:true},
-    {id:'eDc',path:botPath(N.dc),type:'charge',pk:'dc'},
-    {id:'eAc',path:botPath(N.ac),type:'charge',pk:'ac'},
+    {id:'eDc',path:botPath(N.dc),type:'charge-dc',pk:'dc'},
+    {id:'eAc',path:botPath(N.ac),type:'charge-ac',pk:'ac'},
     {id:'eOff',path:botPath(N.office),type:'office-line',pk:'office'},
   ];
 
@@ -172,8 +172,8 @@ function updateEdgeStyles(){
    ['ePv1','flow-edge solar',flowPower.pv1],
    ['ePv2','flow-edge solar',flowPower.pv2],
    ['eStor','flow-edge storage',flowPower.storage],
-   ['eDc','flow-edge charge',flowPower.dc],
-   ['eAc','flow-edge charge',flowPower.ac],
+   ['eDc','flow-edge charge-dc',flowPower.dc],
+   ['eAc','flow-edge charge-ac',flowPower.ac],
    ['eOff','flow-edge office-line',flowPower.office]
   ].forEach(([id,base,p])=>{
     const el=document.getElementById(id);
