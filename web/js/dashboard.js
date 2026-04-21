@@ -269,8 +269,16 @@ function updateFlowLabels(){
   setText('fOffC',offVc!==null?fmt(offVc)+'V   '+fmt(Math.abs(offIc))+'A':'--');
   setText('fOff',fmt(flowPower.office)+'kW');
 
-  // Solar hero
-  setText('solarPowerBig',fmt(Math.abs(pv1P||0)+Math.abs(pv2P||0)));
+  // Solar hero — current output power + efficiency vs. installed capacity
+  const SOLAR_CAPACITY_KW=285.6;
+  const solarOutput=Math.abs(pv1P||0)+Math.abs(pv2P||0);
+  const solarEl=document.getElementById('solarPowerBig');
+  if(solarEl)solarEl.innerHTML=fmt(solarOutput)+'<span class="solar-stat-unit">kW</span>';
+  const effEl=document.getElementById('solarEfficiency');
+  if(effEl){
+    const pct=(solarOutput/SOLAR_CAPACITY_KW)*100;
+    effEl.innerHTML=(isFinite(pct)?pct.toFixed(1):'--')+'<span class="solar-stat-unit">%</span>';
+  }
   setText('pv1Voltage',pv1V!==null?fmt(pv1V)+'V':'--');
   setText('pv1Current',pv1I!==null?fmt(Math.abs(pv1I))+'A':'--');
   setText('pv2Voltage',pv2V!==null?fmt(pv2V)+'V':'--');

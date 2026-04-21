@@ -90,11 +90,18 @@
       <!-- Solar -->
       <div class="panel-card">
         <div class="card-hdr"><span class="card-title">光伏发电量</span><div class="status-dot online"></div></div>
-        <div class="solar-hero">
-          <div class="solar-icon-big">☀️</div>
-          <div class="solar-power-big">
-            <span class="big-number" id="solarPowerBig">--</span>
-            <span class="solar-unit">kW</span>
+        <div class="solar-stats">
+          <div class="solar-stat">
+            <div class="solar-stat-label">装机功率</div>
+            <div class="solar-stat-value">285.6<span class="solar-stat-unit">kW</span></div>
+          </div>
+          <div class="solar-stat">
+            <div class="solar-stat-label">发电功率</div>
+            <div class="solar-stat-value" id="solarPowerBig">--<span class="solar-stat-unit">kW</span></div>
+          </div>
+          <div class="solar-stat">
+            <div class="solar-stat-label">发电率</div>
+            <div class="solar-stat-value" id="solarEfficiency">--<span class="solar-stat-unit">%</span></div>
           </div>
         </div>
         <div class="pv-vi-dual">
@@ -131,6 +138,19 @@
       <!-- Storage -->
       <div class="panel-card">
         <div class="card-hdr"><span class="card-title">储能用电量</span><div class="status-dot online"></div></div>
+        <div class="battery-hero">
+          <div class="battery-svg">
+            <div class="battery-cap"></div>
+            <div class="battery-shell">
+              <div class="battery-fill" id="batteryFill" style="--soc:72%"></div>
+              <div class="battery-sheen"></div>
+            </div>
+          </div>
+          <div class="battery-info">
+            <div class="battery-row"><span class="battery-label">当前电量</span><span class="battery-value" id="batterySoc">--<span class="battery-unit">kWh</span></span></div>
+            <div class="battery-row"><span class="battery-label">剩余</span><span class="battery-value" id="batterySocPct">--<span class="battery-unit">%</span></span></div>
+          </div>
+        </div>
         <div class="sub-section">
           <h5>电池充电电量</h5>
           <div class="metric-grid">

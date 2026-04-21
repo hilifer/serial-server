@@ -180,17 +180,24 @@ a{color:inherit;text-decoration:none}
 /* Sub section */
 .sub-section h5{color:#4ecdc4;font-size:clamp(9px,.9vw,13px);margin:clamp(4px,.6vh,10px) 0 clamp(3px,.4vh,6px)}
 
-/* Solar hero */
-.solar-hero{display:flex;align-items:center;gap:10px;margin-bottom:clamp(6px,1vh,15px)}
-.solar-icon-big{font-size:clamp(36px,5vw,60px);animation:sunRotate 10s linear infinite}
-@keyframes sunRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-.solar-power-big{display:flex;align-items:baseline;gap:6px}
-.big-number{
-  font-size:clamp(28px,4vw,48px);font-weight:bold;
+/* Solar 3-stat header (装机 / 发电 / 发电率) */
+.solar-stats{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(4px,.6vw,10px);
+  margin-bottom:clamp(6px,1vh,12px);
+}
+.solar-stat{
+  text-align:center;padding:clamp(6px,.8vh,10px) 2px;
+  border:1px solid rgba(255,200,70,.25);border-radius:8px;
+  background:linear-gradient(180deg,rgba(255,180,60,.10),rgba(255,100,60,.04));
+}
+.solar-stat-label{font-size:clamp(9px,.95vw,12px);color:rgba(255,255,255,.65);margin-bottom:2px}
+.solar-stat-value{
+  font-size:clamp(16px,2vw,24px);font-weight:bold;
   background:linear-gradient(45deg,#ffd93d,#ff6b6b);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  display:flex;justify-content:center;align-items:baseline;gap:2px;
 }
-.solar-unit{font-size:clamp(12px,1.5vw,18px);color:rgba(255,255,255,.8)}
+.solar-stat-unit{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.7);-webkit-text-fill-color:rgba(255,255,255,.7);background:none}
 
 /* Dual PV V/I */
 .pv-vi-dual{display:flex;gap:clamp(6px,.8vw,14px);margin-bottom:clamp(6px,1vh,12px)}
@@ -204,6 +211,56 @@ a{color:inherit;text-decoration:none}
 }
 .vi-label{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.6);margin-bottom:2px}
 .vi-value{font-size:clamp(12px,1.4vw,18px);font-weight:bold;color:#fff}
+
+/* Animated battery indicator for storage */
+.battery-hero{
+  display:flex;align-items:center;gap:clamp(10px,1.5vw,20px);
+  padding:clamp(6px,.8vh,12px) clamp(4px,.5vw,10px);
+  margin-bottom:clamp(6px,1vh,12px);
+  background:linear-gradient(180deg,rgba(0,200,255,.08),rgba(0,200,255,0));
+  border-radius:8px;
+}
+.battery-svg{position:relative;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.battery-cap{
+  width:clamp(16px,2vw,24px);height:clamp(5px,.7vh,8px);
+  background:#00ffff;border-radius:3px 3px 0 0;margin-bottom:-1px;
+  box-shadow:0 0 6px rgba(0,255,255,.6);
+}
+.battery-shell{
+  width:clamp(40px,5vw,60px);height:clamp(70px,10vh,110px);
+  border:2px solid #00ffff;border-radius:6px;
+  background:rgba(0,20,40,.6);position:relative;overflow:hidden;
+  box-shadow:0 0 10px rgba(0,255,255,.3);
+}
+.battery-fill{
+  position:absolute;left:0;right:0;bottom:0;
+  height:var(--soc,0%);
+  background:linear-gradient(180deg,#22c55e 0%,#16a34a 100%);
+  transition:height .8s ease;
+  box-shadow:0 -2px 8px rgba(34,197,94,.7);
+}
+.battery-fill::before{
+  content:'';position:absolute;left:0;right:0;top:-4px;height:6px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.8),transparent);
+  animation:battPulse 2s ease-in-out infinite;
+}
+@keyframes battPulse{0%,100%{opacity:.4}50%{opacity:1}}
+.battery-sheen{
+  position:absolute;top:0;left:-100%;width:50%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);
+  animation:battSheen 3s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes battSheen{0%{left:-100%}50%,100%{left:100%}}
+.battery-info{flex:1;display:flex;flex-direction:column;gap:clamp(4px,.6vh,10px)}
+.battery-row{display:flex;justify-content:space-between;align-items:baseline}
+.battery-label{font-size:clamp(10px,1vw,13px);color:rgba(255,255,255,.65)}
+.battery-value{
+  font-size:clamp(16px,2vw,24px);font-weight:bold;color:#00ffff;
+  text-shadow:0 0 8px rgba(0,255,255,.5);
+  display:inline-flex;align-items:baseline;gap:2px;
+}
+.battery-unit{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.7);text-shadow:none;font-weight:normal}
 
 /* Left column: 3 cards */
 .dash-col:nth-child(1)>.panel-card:nth-child(1){flex:1} /* 电网购电 */
