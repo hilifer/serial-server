@@ -6,6 +6,9 @@ on:
       - claude/festive-edison-W15j9
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   screenshot:
     runs-on: ubuntu-latest
