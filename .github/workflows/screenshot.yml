@@ -114,3 +114,25 @@ jobs:
           name: screenshots
           path: screenshots/*.png
           if-no-files-found: error
+
+      - name: Push screenshots to screenshots branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Copy screenshots to a temp location first, because the orphan checkout wipes the tree.
+          TMP=$(mktemp -d)
+          cp screenshots/*.png "$TMP"/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin screenshots:screenshots 2>/dev/null || true
+          if git show-ref --verify --quiet refs/heads/screenshots; then
+            git checkout screenshots
+            git rm -rf . 2>/dev/null || true
+          else
+            git checkout --orphan screenshots
+            git rm -rf . 2>/dev/null || true
+          fi
+          cp "$TMP"/*.png .
+          git add -A
+          git commit -m "ci: screenshots from ${GITHUB_SHA}"
+          git push -f origin screenshots
