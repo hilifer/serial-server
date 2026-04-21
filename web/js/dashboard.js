@@ -498,6 +498,28 @@ function clearAllTimers(){
   timers.length=0;
 }
 
+async function pollBatterySoc(){
+  const fill=document.getElementById('batteryFill');
+  const socEl=document.getElementById('batterySoc');
+  const pctEl=document.getElementById('batterySocPct');
+  const d=await fetchJSON('/battery/soc');
+  if(!d||!d.ok){
+    if(fill)fill.style.setProperty('--soc','0%');
+    if(socEl)socEl.innerHTML='--<span class="battery-unit">kWh</span>';
+    if(pctEl)pctEl.innerHTML='--<span class="battery-unit">%</span>';
+    return;
+  }
+  const pct=d.soc_pct;
+  if(fill){
+    fill.style.setProperty('--soc',pct+'%');
+    fill.classList.remove('low','medium');
+    if(pct<20)fill.classList.add('low');
+    else if(pct<50)fill.classList.add('medium');
+  }
+  if(socEl)socEl.innerHTML=fmt(d.current_energy_kwh,1)+'<span class="battery-unit">kWh</span>';
+  if(pctEl)pctEl.innerHTML=pct+'<span class="battery-unit">%</span>';
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   addTimer(updateDashClock,1000);
   renderFlowDiagram();
@@ -505,6 +527,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   bindYearClicks();
   addTimer(pollAllMeters,60000);       // 实时+当月：1分钟
   addTimer(pollYearly,3600000);        // 年数据：1小时
+  addTimer(pollBatterySoc,10000);      // 电池SOC：10秒
 });
 
 window.addEventListener('beforeunload',clearAllTimers);
@@ -514,5 +537,6 @@ document.addEventListener('visibilitychange',()=>{
     addTimer(updateDashClock,1000);
     addTimer(pollAllMeters,60000);
     addTimer(pollYearly,3600000);
+    addTimer(pollBatterySoc,10000);
   }
 });

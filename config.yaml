@@ -37,6 +37,18 @@ serial_ports:
     timeout: 0.1
     mqtt_topic_prefix: "serial/com33"
 
+# BMS (battery management system) over Modbus TCP
+# SOC is read at function code 0x03 from register `soc_addr` (1 register, %).
+# `capacity_kwh` converts SOC % to current energy in kWh for UI display.
+bms:
+  host: "10.6.120.10"
+  port: 502
+  unit: 5
+  soc_addr: 304
+  capacity_kwh: 100
+  timeout: 2.0
+  cache_ttl: 5.0
+
 # Parking space monitoring
 # COM31: Zone A, spaces 1-27 (Modbus addr 1-27)
 # COM32: Zone B, spaces 28-54 (Modbus addr 1-27)

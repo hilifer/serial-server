@@ -301,7 +301,8 @@ def main():
     mqtt_server.start()
 
     # 3. Import and start Flask API (blocking)
-    from meter_api import app
+    from meter_api import app, init_bms
+    init_bms(config)
 
     def _signal_handler(sig, frame):
         print("\n正在关闭...")

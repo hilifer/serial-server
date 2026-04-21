@@ -42,6 +42,8 @@ from parking import (
     STATUS_NAMES, DISPLAY_MODE_NAMES, COLOR_NAMES,
 )
 
+from bms import BMSReader
+
 import os
 import sys
 
@@ -59,6 +61,29 @@ def _get_base_dir():
 
 web_dir = os.path.join(_get_base_dir(), "web")
 app = Flask(__name__, static_folder=web_dir, static_url_path="")
+
+# BMS reader — initialized by server.py via init_bms(cfg)
+_bms: "BMSReader | None" = None
+
+
+def init_bms(cfg: dict) -> None:
+    """Configure the battery BMS reader from the `bms` section of config.yaml."""
+    global _bms
+    b = (cfg or {}).get("bms") or {}
+    if not b.get("host"):
+        logger.info("BMS not configured (no bms.host); /battery/soc will return 503")
+        return
+    _bms = BMSReader(
+        host=b["host"],
+        port=int(b.get("port", 502)),
+        unit=int(b.get("unit", 5)),
+        soc_addr=int(b.get("soc_addr", 304)),
+        capacity_kwh=float(b.get("capacity_kwh", 100.0)),
+        timeout=float(b.get("timeout", 2.0)),
+        cache_ttl=float(b.get("cache_ttl", 5.0)),
+    )
+    logger.info("BMS configured: %s:%d unit=%d capacity=%.1fkWh",
+                _bms.host, _bms.port, _bms.unit, _bms.capacity_kwh)
 
 
 @app.route("/")
@@ -155,6 +180,27 @@ def list_meters():
         }
         for m in METERS
     ])
+
+
+@app.get("/battery/soc")
+def battery_soc():
+    """Read battery SOC from the BMS over Modbus TCP.
+
+    Returns: {ok, soc_pct, current_energy_kwh, capacity_kwh}.
+    503 if the BMS is unconfigured or unreachable.
+    """
+    if _bms is None:
+        abort(503, description="BMS 未配置 (config.yaml 中缺少 bms.host)")
+    soc = _bms.read_soc()
+    if soc is None:
+        abort(503, description=f"读取 BMS 失败: {_bms.last_error or 'unknown'}")
+    soc_pct = max(0, min(100, int(soc)))
+    return jsonify({
+        "ok": True,
+        "soc_pct": soc_pct,
+        "current_energy_kwh": round(soc_pct * _bms.capacity_kwh / 100.0, 2),
+        "capacity_kwh": _bms.capacity_kwh,
+    })
 
 
 @app.get("/meter/<int:addr>/realtime")
