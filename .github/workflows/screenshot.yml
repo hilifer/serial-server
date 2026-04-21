@@ -12,6 +12,7 @@ permissions:
 jobs:
   screenshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -20,85 +21,57 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install OS dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq mosquitto mosquitto-clients socat
-
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
           pip install playwright
           playwright install --with-deps chromium
 
-      - name: Create virtual serial ports
+      - name: Start serial-server (no hardware)
         run: |
-          mkdir -p /tmp/tty
-          socat -d -d pty,raw,echo=0,link=/tmp/tty/31A pty,raw,echo=0,link=/tmp/tty/31B &
-          socat -d -d pty,raw,echo=0,link=/tmp/tty/32A pty,raw,echo=0,link=/tmp/tty/32B &
-          socat -d -d pty,raw,echo=0,link=/tmp/tty/33A pty,raw,echo=0,link=/tmp/tty/33B &
-          sleep 2
-          ls -la /tmp/tty/
-
-      - name: Patch config.yaml (runner only, not committed)
-        run: |
-          sed -i 's|port: "COM31"|port: "/tmp/tty/31A"|;
-                  s|port: "COM32"|port: "/tmp/tty/32A"|;
-                  s|port: "COM33"|port: "/tmp/tty/33A"|' config.yaml
-          grep 'port:' config.yaml
-
-      - name: Configure and start Mosquitto (WebSocket)
-        run: |
-          cat > /tmp/mosquitto.conf <<EOF
-          listener 1883
-          protocol mqtt
-          allow_anonymous true
-
-          listener 9001
-          protocol websockets
-          allow_anonymous true
-
-          persistence false
-          log_dest stdout
-          EOF
-          sudo systemctl stop mosquitto || true
-          mosquitto -c /tmp/mosquitto.conf -d
-          sleep 1
-
-      - name: Start serial-server
-        run: |
-          nohup python server.py > /tmp/server.log 2>&1 &
-          echo $! > /tmp/server.pid
+          # server.py tolerates missing serial ports and broker; Flask still runs.
+          nohup python server.py > server.log 2>&1 &
+          echo $! > server.pid
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8000/meters > /dev/null; then
-              echo "Server is up"
+            if curl -sf http://127.0.0.1:8000/meters > /dev/null 2>&1; then
+              echo "Server up after ${i}s"
               break
             fi
             sleep 1
           done
-          tail -30 /tmp/server.log || true
+          curl -sf http://127.0.0.1:8000/meters > /dev/null 2>&1 || {
+            echo "Server failed to come up. Log:"
+            cat server.log
+            exit 1
+          }
 
-      - name: Take screenshots with Playwright (real Chromium)
+      - name: Screenshot with Playwright
         run: |
           mkdir -p screenshots
           python <<'PY'
           import asyncio
           from playwright.async_api import async_playwright
 
+          TARGETS = [
+              ('/', 'index.png', 4000),
+              ('/detail.html', 'detail.png', 6000),
+          ]
+
           async def main():
               async with async_playwright() as p:
                   browser = await p.chromium.launch()
                   ctx = await browser.new_context(viewport={'width': 1920, 'height': 1080})
                   page = await ctx.new_page()
-
-                  await page.goto('http://127.0.0.1:8000/', wait_until='networkidle')
-                  await page.wait_for_timeout(3000)
-                  await page.screenshot(path='screenshots/index.png', full_page=False)
-
-                  await page.goto('http://127.0.0.1:8000/detail.html', wait_until='networkidle')
-                  await page.wait_for_timeout(5000)
-                  await page.screenshot(path='screenshots/detail.png', full_page=False)
-
+                  for path, out, wait_ms in TARGETS:
+                      print(f'Visiting http://127.0.0.1:8000{path}')
+                      try:
+                          await page.goto(f'http://127.0.0.1:8000{path}',
+                                           wait_until='domcontentloaded', timeout=15000)
+                      except Exception as e:
+                          print(f'goto error (continuing): {e}')
+                      await page.wait_for_timeout(wait_ms)
+                      await page.screenshot(path=f'screenshots/{out}', full_page=False)
+                      print(f'Saved screenshots/{out}')
                   await browser.close()
 
           asyncio.run(main())
@@ -108,28 +81,32 @@ jobs:
       - name: Stop server
         if: always()
         run: |
-          kill $(cat /tmp/server.pid) 2>/dev/null || true
-          tail -50 /tmp/server.log || true
+          kill "$(cat server.pid)" 2>/dev/null || true
+          echo "--- server.log (last 80) ---"
+          tail -80 server.log || true
 
-      - name: Upload screenshots
+      - name: Upload screenshots artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
           path: screenshots/*.png
-          if-no-files-found: error
+          if-no-files-found: warn
 
-      - name: Push screenshots to screenshots branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push screenshots to 'screenshots' branch
+        if: always()
         run: |
-          # Copy screenshots to a temp location first, because the orphan checkout wipes the tree.
+          if ! ls screenshots/*.png >/dev/null 2>&1; then
+            echo "No screenshots produced, skipping push"
+            exit 0
+          fi
           TMP=$(mktemp -d)
           cp screenshots/*.png "$TMP"/
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin screenshots:screenshots 2>/dev/null || true
-          if git show-ref --verify --quiet refs/heads/screenshots; then
-            git checkout screenshots
+          git fetch origin screenshots 2>/dev/null || true
+          if git ls-remote --exit-code --heads origin screenshots >/dev/null 2>&1; then
+            git checkout -B screenshots origin/screenshots
             git rm -rf . 2>/dev/null || true
           else
             git checkout --orphan screenshots
