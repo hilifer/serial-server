@@ -279,6 +279,7 @@ window.addEventListener('beforeunload',clearParkTimers);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearParkTimers();
   else{
+    clearParkTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
     addParkTimer(pollParking, 30000);
     addParkTimer(pollGuns, 30000);
   }

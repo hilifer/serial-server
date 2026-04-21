@@ -531,6 +531,7 @@ window.addEventListener('beforeunload',clearAllTimers);
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearAllTimers();
   else{
+    clearAllTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
     addTimer(updateDashClock,1000);
     addTimer(pollAllMeters,60000);
     addTimer(pollYearly,3600000);
