@@ -1,5 +1,5 @@
 /**
- * Auto-rotate between the two main pages (/ and /detail.html) every 10s.
+ * Auto-rotate between the two main pages (/ and /detail.html) every 20s.
  *
  * Useful for kiosk/bigscreen mode. Disable by appending ?norotate to the URL
  * when you need to interact with the page without getting bumped.
@@ -9,7 +9,7 @@
   if (new URLSearchParams(location.search).has('norotate')) return;
 
   const PAGES = ['/', '/detail.html'];
-  const INTERVAL_MS = 10000;
+  const INTERVAL_MS = 20000;
 
   function currentKey(){
     const p = location.pathname;
