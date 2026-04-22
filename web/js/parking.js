@@ -234,7 +234,7 @@ async function pollPiles() {
     pileData = {};
     // Odoo pile IDs in physical position order (left-top to right-bottom)
     // from lizi source: ids=[2312,2240,2241,2313,...,2325,2326,2327]
-    const positionIds = [2312,2240,2241,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
+    const positionIds = [2312,2241,2240,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
     // New display numbers per position (right-to-left, top-to-bottom):
     // position 0(左上)=16, 1=17, 2=18, 3=13, 4=14, 5=15, 6=10, 7=11, 8=12,
     // 9=7, 10=8, 11=9, 12=4, 13=5, 14=6, 15=1, 16=2, 17=3
