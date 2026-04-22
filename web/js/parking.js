@@ -101,15 +101,15 @@ function renderPiles() {
 
   PILE_POSITIONS.forEach((pos, idx) => {
     const pileType = getPileTypeById(pos.id);
-    const statusClass = isPileFree(pos.id) ? 'free' : 'busy';
+    const idleSuffix = isPileFree(pos.id) ? ' idle' : '';
 
     const div = document.createElement('div');
-    div.className = 'pile-label ' + statusClass;
+    div.className = 'pile-label free' + idleSuffix;
     div.style.left = pos.left + '%';
     div.style.top = pos.top + '%';
 
     const bubble = document.createElement('div');
-    bubble.className = 'pile-bubble ' + statusClass;
+    bubble.className = 'pile-bubble free' + idleSuffix;
 
     const title = document.createElement('div');
     title.className = 'pile-title';
