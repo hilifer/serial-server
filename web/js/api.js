@@ -2,15 +2,24 @@
  * API helper — fetch from Flask backend with polling support.
  */
 const API_BASE = '';  // Same origin
+const FETCH_TIMEOUT_MS = 8000;
 
-async function fetchJSON(url) {
+async function fetchJSON(url, timeoutMs = FETCH_TIMEOUT_MS) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-        const resp = await fetch(API_BASE + url);
+        const resp = await fetch(API_BASE + url, { signal: ctrl.signal });
         if (!resp.ok) return null;
         return await resp.json();
     } catch (e) {
-        console.error('API error:', url, e);
+        if (e.name === 'AbortError') {
+            console.warn('API timeout:', url);
+        } else {
+            console.error('API error:', url, e);
+        }
         return null;
+    } finally {
+        clearTimeout(tid);
     }
 }
 

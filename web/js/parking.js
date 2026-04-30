@@ -277,11 +277,20 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 window.addEventListener('beforeunload',clearParkTimers);
+
+function restartParkTimers(){
+  clearParkTimers();
+  addParkTimer(pollParking, 3000);
+  addParkTimer(pollGuns, 5000);
+  pollPiles();  // one-shot; not on a timer here
+}
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearParkTimers();
-  else{
-    clearParkTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
-    addParkTimer(pollParking, 3000);
-    addParkTimer(pollGuns, 5000);
-  }
+  else restartParkTimers();
+});
+
+// Page Lifecycle: re-arm after the browser unfreezes a long-paused tab.
+['pageshow','resume','focus'].forEach(evt=>{
+  window.addEventListener(evt,()=>{ if(!document.hidden) restartParkTimers(); });
 });

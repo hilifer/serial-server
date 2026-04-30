@@ -528,13 +528,23 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 window.addEventListener('beforeunload',clearAllTimers);
+
+function restartAllTimers(){
+  clearAllTimers();
+  addTimer(updateDashClock,1000);
+  addTimer(pollAllMeters,5000);
+  addTimer(pollYearly,3600000);
+  addTimer(pollBatterySoc,10000);
+}
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearAllTimers();
-  else{
-    clearAllTimers();  // 防御性清理：避免极端情况下 visible 连续触发导致 interval 叠加
-    addTimer(updateDashClock,1000);
-    addTimer(pollAllMeters,5000);
-    addTimer(pollYearly,3600000);
-    addTimer(pollBatterySoc,10000);
-  }
+  else restartAllTimers();
+});
+
+// Page Lifecycle: when the browser unfreezes a long-paused tab, intervals
+// resume but with stale state. Force a fresh restart so polling cadence
+// stays deterministic across multi-day kiosk runs.
+['pageshow','resume','focus'].forEach(evt=>{
+  window.addEventListener(evt,()=>{ if(!document.hidden) restartAllTimers(); });
 });
