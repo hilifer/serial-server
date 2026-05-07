@@ -296,9 +296,17 @@ def main():
         # Start background reconnect loop
         mgr.start_reconnect_loop()
 
-    # 2. Start MQTT WS transparent bridge (non-blocking)
-    mqtt_server = MQTTSerialServer(config)
-    mqtt_server.start()
+    # 2. Start MQTT WS transparent bridge (non-blocking) — only if enabled.
+    # The bridge's _read_loop continuously reads each serial port to publish
+    # to MQTT topics; when this project doesn't actually use the MQTT side,
+    # disabling it removes a constant background consumer of the bus and
+    # noticeably reduces incomplete-frame errors.
+    if config.get("mqtt", {}).get("enabled", True):
+        mqtt_server = MQTTSerialServer(config)
+        mqtt_server.start()
+    else:
+        mqtt_server = None
+        logger.info("MQTT bridge disabled (config: mqtt.enabled=false)")
 
     # 3. Import and start Flask API (blocking)
     from meter_api import (app, init_bms, init_meter_cache, init_parking_cache,
@@ -312,10 +320,11 @@ def main():
 
     def _signal_handler(sig, frame):
         print("\n正在关闭...")
-        try:
-            mqtt_server.stop()
-        except Exception:
-            pass
+        if mqtt_server is not None:
+            try:
+                mqtt_server.stop()
+            except Exception:
+                pass
         for mgr in serial_managers.values():
             try:
                 mgr.close()

@@ -1,6 +1,11 @@
 # MQTT WebSocket Serial Server Configuration
+# enabled=false skips the MQTT bridge entirely (no broker connect, no
+# per-port _read_loop polling) — use this when only the REST API + caches
+# are needed, since the bridge otherwise competes with MeterCache for
+# the COM33 RS485 bus.
 
 mqtt:
+  enabled: false
   broker: "localhost"
   port: 1883
   ws_port: 9001
@@ -16,7 +21,7 @@ serial_ports:
     bytesize: 8
     parity: "N"             # N=None, E=Even, O=Odd
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com31"
 
   - name: "COM32"
@@ -25,7 +30,7 @@ serial_ports:
     bytesize: 8
     parity: "N"
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com32"
 
   - name: "COM33"
@@ -34,7 +39,7 @@ serial_ports:
     bytesize: 8
     parity: "N"
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com33"
 
 # Background data caches — keep the latest meter/parking values in
