@@ -67,14 +67,22 @@ class YearlyCache:
                     continue
                 try:
                     payload = self._read(ser, m)
+                    has_value = _yearly_has_value(payload)
                     now = time.time()
                     with self._lock:
-                        self._cache[m.slave_addr] = {
-                            "payload": payload,
-                            "ts": now,
-                            "error": None,
-                        }
-                    logger.debug("YearlyCache addr=%d refreshed", m.slave_addr)
+                        if has_value:
+                            self._cache[m.slave_addr] = {
+                                "payload": payload,
+                                "ts": now,
+                                "error": None,
+                            }
+                            logger.debug("YearlyCache addr=%d refreshed", m.slave_addr)
+                        else:
+                            # Total wash-out — keep last good 12-month snapshot.
+                            entry = self._cache.get(m.slave_addr) or {}
+                            entry["error"] = "all months unreadable"
+                            entry["error_ts"] = now
+                            self._cache[m.slave_addr] = entry
                 except Exception as e:
                     with self._lock:
                         entry = self._cache.get(m.slave_addr) or {}
@@ -89,3 +97,17 @@ class YearlyCache:
                 self._stop.wait(0.2)
             if self._stop.wait(self._interval):
                 return
+
+
+def _yearly_has_value(payload: dict) -> bool:
+    """True if the yearly payload has any month with non-null energy data."""
+    if not payload:
+        return False
+    months = payload.get("months") or []
+    for m in months:
+        if not isinstance(m, dict):
+            continue
+        for k in ("energy_active_total_kwh", "energy_forward_kwh", "energy_reverse_kwh"):
+            if m.get(k) is not None:
+                return True
+    return False

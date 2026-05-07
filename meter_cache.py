@@ -70,13 +70,26 @@ class MeterCache:
                     continue
                 try:
                     payload = self._read(ser, m)
+                    has_value = _payload_has_value(payload)
                     now = time.time()
                     with self._lock:
-                        self._cache[m.slave_addr] = {
-                            "payload": payload,
-                            "ts": now,
-                            "error": None,
-                        }
+                        if has_value:
+                            # Successful (at least partial) read — refresh fully.
+                            self._cache[m.slave_addr] = {
+                                "payload": payload,
+                                "ts": now,
+                                "error": None,
+                            }
+                        else:
+                            # All registers came back null (RS485 noise, slow slave,
+                            # bus contention). Keep the previous good payload so the
+                            # UI doesn't blank out; just record the error.
+                            entry = self._cache.get(m.slave_addr) or {}
+                            entry["error"] = "all reads failed"
+                            entry["error_ts"] = now
+                            self._cache[m.slave_addr] = entry
+                            logger.debug("MeterCache addr=%d full failure, "
+                                         "kept last good payload", m.slave_addr)
                 except Exception as e:
                     with self._lock:
                         entry = self._cache.get(m.slave_addr) or {}
@@ -87,3 +100,14 @@ class MeterCache:
                                  m.slave_addr, e)
             if self._stop.wait(self._interval):
                 return
+
+
+def _payload_has_value(payload: dict) -> bool:
+    """True if the realtime payload has at least one non-null register value."""
+    if not payload:
+        return False
+    data = payload.get("data") or {}
+    return any(
+        isinstance(v, dict) and v.get("value") is not None
+        for v in data.values()
+    )
