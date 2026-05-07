@@ -260,16 +260,17 @@ def setup_logging(config: dict):
 
     log_file = log_cfg.get("file")
     if log_file:
-        from logging.handlers import RotatingFileHandler
-        # Keep one rolled-over file (.1) so the running file never exceeds the
-        # cap. With max_bytes=24 MB and backup_count=1 the worst case on disk
-        # is 2 × 24 MB = 48 MB.
+        from log_handler import TimedSizedRotatingFileHandler
+        # Daily rotation with a size safety net: each day gets its own file
+        # (`serial_server.log.2026-05-07`); if a day's traffic blows past
+        # max_bytes the file is rolled mid-day and continued in a `.1`,
+        # `.2` slice so no single file ever exceeds the cap.
         max_bytes = int(log_cfg.get("max_bytes", 24 * 1024 * 1024))
-        backup_count = int(log_cfg.get("backup_count", 1))
-        file_handler = RotatingFileHandler(
+        backup_count = int(log_cfg.get("backup_count", 14))
+        file_handler = TimedSizedRotatingFileHandler(
             Path(__file__).parent / log_file,
-            maxBytes=max_bytes,
-            backupCount=backup_count,
+            max_bytes=max_bytes,
+            backup_count=backup_count,
             encoding="utf-8",
         )
         file_handler.setFormatter(fmt)
