@@ -71,10 +71,4 @@ parking:
 logging:
   level: "INFO"             # DEBUG, INFO, WARNING, ERROR
   file: "serial_server.log"
-  # Daily rotation + per-file size cap. Each midnight the active file
-  # is renamed `serial_server.log.YYYY-MM-DD`. If a day's traffic exceeds
-  # max_bytes the file is rolled mid-day and continued in `.1`, `.2`, ...
-  # backup_count caps the total number of rolled files retained (oldest
-  # deleted first).
-  max_bytes: 25165824       # 24 MB
-  backup_count: 14          # ~2 weeks of dailies (or fewer days if any day rolls multiple times)
+  backup_count: 14          # rotate daily at midnight, keep this many days of history
