@@ -262,7 +262,8 @@ def setup_logging(config: dict):
     if log_file:
         from logging.handlers import TimedRotatingFileHandler
         # Roll the active file at local midnight so each day gets its own
-        # `serial_server.log.YYYY-MM-DD`; backup_count days of history kept.
+        # `serial_server.log.YYYY-MM-DD`. Keep the last `backup_count` days
+        # of history; older rolls are deleted automatically.
         backup_count = int(log_cfg.get("backup_count", 14))
         file_handler = TimedRotatingFileHandler(
             Path(__file__).parent / log_file,
