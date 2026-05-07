@@ -71,3 +71,5 @@ parking:
 logging:
   level: "INFO"             # DEBUG, INFO, WARNING, ERROR
   file: "serial_server.log"
+  max_bytes: 25165824       # rotate when log file reaches this size (24 MB)
+  backup_count: 1           # keep N rolled files (.1, .2, ...); worst case disk = (1+N) × max_bytes

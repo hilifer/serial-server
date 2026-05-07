@@ -260,8 +260,17 @@ def setup_logging(config: dict):
 
     log_file = log_cfg.get("file")
     if log_file:
-        file_handler = logging.FileHandler(
-            Path(__file__).parent / log_file, encoding="utf-8"
+        from logging.handlers import RotatingFileHandler
+        # Keep one rolled-over file (.1) so the running file never exceeds the
+        # cap. With max_bytes=24 MB and backup_count=1 the worst case on disk
+        # is 2 × 24 MB = 48 MB.
+        max_bytes = int(log_cfg.get("max_bytes", 24 * 1024 * 1024))
+        backup_count = int(log_cfg.get("backup_count", 1))
+        file_handler = RotatingFileHandler(
+            Path(__file__).parent / log_file,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding="utf-8",
         )
         file_handler.setFormatter(fmt)
         handlers.append(file_handler)
