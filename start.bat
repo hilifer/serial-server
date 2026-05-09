@@ -52,8 +52,14 @@ echo   能源看板:  http://localhost:8000/detail.html
 echo   按 Ctrl+C 停止
 echo ============================================
 
-REM Background: wait for service ready, check serial, then open browser
-start "" /B cmd /c "timeout /t 5 /nobreak >nul && start msedge --start-fullscreen http://localhost:8000/ 2>nul || start http://localhost:8000/"
+REM Background: wait for service ready, check serial, then open browser.
+REM Edge flags disable every power-save / throttle path that has been
+REM observed to delay or drop the kiosk's <meta refresh> rotation:
+REM   - SleepingTabs / MsSleepingTabs       : tab freeze after idle
+REM   - background-timer-throttling         : 1Hz cap on hidden timers
+REM   - renderer-backgrounding              : whole-renderer pause
+REM   - backgrounding-occluded-windows      : pause when not on top
+start "" /B cmd /c "timeout /t 5 /nobreak >nul && start msedge --start-fullscreen --disable-features=MsSleepingTabs,SleepingTabs --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows http://localhost:8000/ 2>nul || start http://localhost:8000/"
 
 REM Server runs in foreground (Ctrl+C to stop)
 python server.py
