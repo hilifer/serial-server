@@ -527,24 +527,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   addTimer(pollBatterySoc,10000);      // 电池SOC：10秒
 });
 
-window.addEventListener('beforeunload',clearAllTimers);
-
-function restartAllTimers(){
-  clearAllTimers();
-  addTimer(updateDashClock,1000);
-  addTimer(pollAllMeters,5000);
-  addTimer(pollYearly,3600000);
-  addTimer(pollBatterySoc,10000);
-}
-
-document.addEventListener('visibilitychange',()=>{
-  if(document.hidden) clearAllTimers();
-  else restartAllTimers();
-});
-
-// Page Lifecycle: when the browser unfreezes a long-paused tab, intervals
-// resume but with stale state. Force a fresh restart so polling cadence
-// stays deterministic across multi-day kiosk runs.
-['pageshow','resume','focus'].forEach(evt=>{
-  window.addEventListener(evt,()=>{ if(!document.hidden) restartAllTimers(); });
-});
+// Page lives ~20s before <meta refresh> reloads it from scratch — no need
+// for visibility/lifecycle gymnastics, no need to clean up on unload.
+// Adding pageshow/resume/focus handlers caused fetch storms on focus
+// thrash and is what made the JS-driven rotate.js so flaky in 664eee0.

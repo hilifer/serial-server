@@ -276,21 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
   pollPiles();
 });
 
-window.addEventListener('beforeunload',clearParkTimers);
-
-function restartParkTimers(){
-  clearParkTimers();
-  addParkTimer(pollParking, 3000);
-  addParkTimer(pollGuns, 5000);
-  pollPiles();  // one-shot; not on a timer here
-}
-
-document.addEventListener('visibilitychange',()=>{
-  if(document.hidden) clearParkTimers();
-  else restartParkTimers();
-});
-
-// Page Lifecycle: re-arm after the browser unfreezes a long-paused tab.
-['pageshow','resume','focus'].forEach(evt=>{
-  window.addEventListener(evt,()=>{ if(!document.hidden) restartParkTimers(); });
-});
+// Page lives ~20s before <meta refresh> reloads it from scratch — no need
+// for visibility/lifecycle gymnastics, no need to clean up on unload.
+// Adding pageshow/resume/focus handlers caused fetch storms on focus
+// thrash and is what made the JS-driven rotate.js so flaky in 664eee0.
