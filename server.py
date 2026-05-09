@@ -260,8 +260,16 @@ def setup_logging(config: dict):
 
     log_file = log_cfg.get("file")
     if log_file:
-        file_handler = logging.FileHandler(
-            Path(__file__).parent / log_file, encoding="utf-8"
+        from logging.handlers import TimedRotatingFileHandler
+        # Roll the active file at local midnight so each day gets its own
+        # `serial_server.log.YYYY-MM-DD`. Keep the last `backup_count` days
+        # of history; older rolls are deleted automatically.
+        backup_count = int(log_cfg.get("backup_count", 14))
+        file_handler = TimedRotatingFileHandler(
+            Path(__file__).parent / log_file,
+            when="midnight",
+            backupCount=backup_count,
+            encoding="utf-8",
         )
         file_handler.setFormatter(fmt)
         handlers.append(file_handler)
@@ -296,19 +304,35 @@ def main():
         # Start background reconnect loop
         mgr.start_reconnect_loop()
 
-    # 2. Start MQTT WS transparent bridge (non-blocking)
-    mqtt_server = MQTTSerialServer(config)
-    mqtt_server.start()
+    # 2. Start MQTT WS transparent bridge (non-blocking) — only if enabled.
+    # The bridge's _read_loop continuously reads each serial port to publish
+    # to MQTT topics; when this project doesn't actually use the MQTT side,
+    # disabling it removes a constant background consumer of the bus and
+    # noticeably reduces incomplete-frame errors.
+    if config.get("mqtt", {}).get("enabled", True):
+        mqtt_server = MQTTSerialServer(config)
+        mqtt_server.start()
+    else:
+        mqtt_server = None
+        logger.info("MQTT bridge disabled (config: mqtt.enabled=false)")
 
     # 3. Import and start Flask API (blocking)
-    from meter_api import app
+    from meter_api import (app, init_bms, init_meter_cache, init_parking_cache,
+                           init_odoo_cache, init_yearly_cache)
+    init_bms(config)
+    cache_cfg = config.get("cache", {})
+    init_meter_cache(scan_interval_s=float(cache_cfg.get("meter_interval", 2.0)))
+    init_parking_cache(scan_interval_s=float(cache_cfg.get("parking_interval", 2.0)))
+    init_odoo_cache(ttl_s=float(cache_cfg.get("odoo_ttl", 5.0)))
+    init_yearly_cache(refresh_interval_s=float(cache_cfg.get("yearly_refresh", 3600.0)))
 
     def _signal_handler(sig, frame):
         print("\n正在关闭...")
-        try:
-            mqtt_server.stop()
-        except Exception:
-            pass
+        if mqtt_server is not None:
+            try:
+                mqtt_server.stop()
+            except Exception:
+                pass
         for mgr in serial_managers.values():
             try:
                 mgr.close()

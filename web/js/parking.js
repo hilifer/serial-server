@@ -101,14 +101,15 @@ function renderPiles() {
 
   PILE_POSITIONS.forEach((pos, idx) => {
     const pileType = getPileTypeById(pos.id);
+    const idleSuffix = isPileFree(pos.id) ? ' idle' : '';
 
     const div = document.createElement('div');
-    div.className = 'pile-label free';
+    div.className = 'pile-label free' + idleSuffix;
     div.style.left = pos.left + '%';
     div.style.top = pos.top + '%';
 
     const bubble = document.createElement('div');
-    bubble.className = 'pile-bubble free';
+    bubble.className = 'pile-bubble free' + idleSuffix;
 
     const title = document.createElement('div');
     title.className = 'pile-title';
@@ -234,7 +235,7 @@ async function pollPiles() {
     pileData = {};
     // Odoo pile IDs in physical position order (left-top to right-bottom)
     // from lizi source: ids=[2312,2240,2241,2313,...,2325,2326,2327]
-    const positionIds = [2312,2240,2241,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
+    const positionIds = [2312,2241,2240,2313,2314,2315,2316,2317,2318,2319,2320,2321,2322,2323,2324,2325,2326,2327];
     // New display numbers per position (right-to-left, top-to-bottom):
     // position 0(左上)=16, 1=17, 2=18, 3=13, 4=14, 5=15, 6=10, 7=11, 8=12,
     // 9=7, 10=8, 11=9, 12=4, 13=5, 14=6, 15=1, 16=2, 17=3
@@ -270,16 +271,26 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCars();
   renderPiles();
 
-  addParkTimer(pollParking, 30000);
-  addParkTimer(pollGuns, 30000);
+  addParkTimer(pollParking, 3000);     // 车位状态：3秒（后端走缓存）
+  addParkTimer(pollGuns, 5000);        // 充电枪：5秒（后端 Odoo TTL 5秒）
   pollPiles();
 });
 
 window.addEventListener('beforeunload',clearParkTimers);
+
+function restartParkTimers(){
+  clearParkTimers();
+  addParkTimer(pollParking, 3000);
+  addParkTimer(pollGuns, 5000);
+  pollPiles();  // one-shot; not on a timer here
+}
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearParkTimers();
-  else{
-    addParkTimer(pollParking, 30000);
-    addParkTimer(pollGuns, 30000);
-  }
+  else restartParkTimers();
+});
+
+// Page Lifecycle: re-arm after the browser unfreezes a long-paused tab.
+['pageshow','resume','focus'].forEach(evt=>{
+  window.addEventListener(evt,()=>{ if(!document.hidden) restartParkTimers(); });
 });

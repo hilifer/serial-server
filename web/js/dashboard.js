@@ -51,9 +51,9 @@ function renderFlowDiagram(){
     pv2:    {x:CX+d2,y:topY,icon:'☀️',name:'光伏2',bc:'#ff9500',lc:'#ffdd55',r:R},
     storage:{x:CX+d1,y:topY,icon:'🔋',name:'储能',bc:'#00ffff',lc:'#88ffff',r:R},
     center: {x:CX,y:midY,name:'光储系统',bc:'#3b82f6',isRect:true},
-    dc:     {x:CX-d3,y:botY,icon:'🚗',name:'直流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
+    office: {x:CX-d3,y:botY,icon:'💻',name:'办公室',bc:'#4ecdc4',lc:'#bbddff',r:RB},
     ac:     {x:CX,y:botY,icon:'🚗',name:'交流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
-    office: {x:CX+d3,y:botY,icon:'💻',name:'办公室',bc:'#4ecdc4',lc:'#bbddff',r:RB},
+    dc:     {x:CX+d3,y:botY,icon:'🚗',name:'直流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
   };
 
   function gridPath(){
@@ -83,8 +83,8 @@ function renderFlowDiagram(){
     {id:'ePv1',path:pvPath(N.pv1),type:'solar',pk:'pv1'},
     {id:'ePv2',path:pvPath(N.pv2),type:'solar',pk:'pv2'},
     {id:'eStor',path:storagePath(),type:'storage',pk:'storage',bidir:true},
-    {id:'eDc',path:botPath(N.dc),type:'charge',pk:'dc'},
-    {id:'eAc',path:botPath(N.ac),type:'charge',pk:'ac'},
+    {id:'eDc',path:botPath(N.dc),type:'charge-dc',pk:'dc'},
+    {id:'eAc',path:botPath(N.ac),type:'charge-ac',pk:'ac'},
     {id:'eOff',path:botPath(N.office),type:'office-line',pk:'office'},
   ];
 
@@ -172,8 +172,8 @@ function updateEdgeStyles(){
    ['ePv1','flow-edge solar',flowPower.pv1],
    ['ePv2','flow-edge solar',flowPower.pv2],
    ['eStor','flow-edge storage',flowPower.storage],
-   ['eDc','flow-edge charge',flowPower.dc],
-   ['eAc','flow-edge charge',flowPower.ac],
+   ['eDc','flow-edge charge-dc',flowPower.dc],
+   ['eAc','flow-edge charge-ac',flowPower.ac],
    ['eOff','flow-edge office-line',flowPower.office]
   ].forEach(([id,base,p])=>{
     const el=document.getElementById(id);
@@ -269,8 +269,16 @@ function updateFlowLabels(){
   setText('fOffC',offVc!==null?fmt(offVc)+'V   '+fmt(Math.abs(offIc))+'A':'--');
   setText('fOff',fmt(flowPower.office)+'kW');
 
-  // Solar hero
-  setText('solarPowerBig',fmt(Math.abs(pv1P||0)+Math.abs(pv2P||0)));
+  // Solar hero — current output power + efficiency vs. installed capacity
+  const SOLAR_CAPACITY_KW=285.6;
+  const solarOutput=Math.abs(pv1P||0)+Math.abs(pv2P||0);
+  const solarEl=document.getElementById('solarPowerBig');
+  if(solarEl)solarEl.innerHTML=fmt(solarOutput)+'<span class="solar-stat-unit">kW</span>';
+  const effEl=document.getElementById('solarEfficiency');
+  if(effEl){
+    const pct=(solarOutput/SOLAR_CAPACITY_KW)*100;
+    effEl.innerHTML=(isFinite(pct)?pct.toFixed(1):'--')+'<span class="solar-stat-unit">%</span>';
+  }
   setText('pv1Voltage',pv1V!==null?fmt(pv1V)+'V':'--');
   setText('pv1Current',pv1I!==null?fmt(Math.abs(pv1I))+'A':'--');
   setText('pv2Voltage',pv2V!==null?fmt(pv2V)+'V':'--');
@@ -490,21 +498,53 @@ function clearAllTimers(){
   timers.length=0;
 }
 
+async function pollBatterySoc(){
+  const fill=document.getElementById('batteryFill');
+  const pctEl=document.getElementById('batterySocPct');
+  const d=await fetchJSON('/battery/soc');
+  if(!d||!d.ok){
+    if(fill){fill.style.setProperty('--soc','0%');fill.classList.remove('low','medium');}
+    if(pctEl)pctEl.innerHTML='--<span class="battery-unit">%</span>';
+    return;
+  }
+  const pct=d.soc_pct;
+  if(fill){
+    fill.style.setProperty('--soc',pct+'%');
+    fill.classList.remove('low','medium');
+    if(pct<20)fill.classList.add('low');
+    else if(pct<50)fill.classList.add('medium');
+  }
+  if(pctEl)pctEl.innerHTML=pct+'<span class="battery-unit">%</span>';
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   addTimer(updateDashClock,1000);
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  addTimer(pollAllMeters,60000);       // 实时+当月：1分钟
+  addTimer(pollAllMeters,5000);        // 实时+当月：5秒（后端走缓存）
   addTimer(pollYearly,3600000);        // 年数据：1小时
+  addTimer(pollBatterySoc,10000);      // 电池SOC：10秒
 });
 
 window.addEventListener('beforeunload',clearAllTimers);
+
+function restartAllTimers(){
+  clearAllTimers();
+  addTimer(updateDashClock,1000);
+  addTimer(pollAllMeters,5000);
+  addTimer(pollYearly,3600000);
+  addTimer(pollBatterySoc,10000);
+}
+
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden) clearAllTimers();
-  else{
-    addTimer(updateDashClock,1000);
-    addTimer(pollAllMeters,60000);
-    addTimer(pollYearly,3600000);
-  }
+  else restartAllTimers();
+});
+
+// Page Lifecycle: when the browser unfreezes a long-paused tab, intervals
+// resume but with stale state. Force a fresh restart so polling cadence
+// stays deterministic across multi-day kiosk runs.
+['pageshow','resume','focus'].forEach(evt=>{
+  window.addEventListener(evt,()=>{ if(!document.hidden) restartAllTimers(); });
 });
