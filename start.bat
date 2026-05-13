@@ -52,14 +52,33 @@ echo   能源看板:  http://localhost:8000/detail.html
 echo   按 Ctrl+C 停止
 echo ============================================
 
-REM Background: wait for service ready, check serial, then open browser.
-REM Edge flags disable every power-save / throttle path that has been
-REM observed to delay or drop the kiosk's <meta refresh> rotation:
-REM   - SleepingTabs / MsSleepingTabs       : tab freeze after idle
-REM   - background-timer-throttling         : 1Hz cap on hidden timers
-REM   - renderer-backgrounding              : whole-renderer pause
-REM   - backgrounding-occluded-windows      : pause when not on top
-start "" /B cmd /c "timeout /t 5 /nobreak >nul && start msedge --start-fullscreen --disable-features=MsSleepingTabs,SleepingTabs --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows http://localhost:8000/ 2>nul || start http://localhost:8000/"
+REM Stop any previous Edge instance GRACEFULLY (WM_CLOSE) before relaunch.
+REM If we kill with /F instead, Edge marks the previous session as
+REM "abnormally terminated" and shows a "还原页面 / Edge 意外关闭" bubble
+REM on next launch every single time. /T (no /F) sends WM_CLOSE and gives
+REM Edge a chance to mark the shutdown as clean.
+echo Stopping any previous Edge...
+taskkill /IM msedge.exe /T >nul 2>&1
+REM Give Edge a moment to write a clean exit state, then force-kill any
+REM stragglers (e.g. renderer that didn't honour WM_CLOSE).
+timeout /t 2 /nobreak >nul
+taskkill /IM msedge.exe /F >nul 2>&1
+
+REM Background: wait for service ready, then open browser.
+REM Edge flags break down into two groups:
+REM   (a) anti-throttle (keep the kiosk page from being frozen by Edge
+REM       when it's idle in the background):
+REM         --disable-features=MsSleepingTabs,SleepingTabs
+REM         --disable-background-timer-throttling
+REM         --disable-renderer-backgrounding
+REM         --disable-backgrounding-occluded-windows
+REM   (b) suppress nag UI that would otherwise pop up on each boot:
+REM         --disable-session-crashed-bubble  : suppress 还原页面 bubble
+REM         --no-first-run                    : skip first-run setup
+REM         --no-default-browser-check        : skip "set as default?"
+REM         --noerrdialogs                    : suppress JS / network err popups
+REM         --disable-infobars                : kill info bars
+start "" /B cmd /c "timeout /t 5 /nobreak >nul && start msedge --start-fullscreen --disable-features=MsSleepingTabs,SleepingTabs --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-session-crashed-bubble --no-first-run --no-default-browser-check --noerrdialogs --disable-infobars http://localhost:8000/ 2>nul || start http://localhost:8000/"
 
 REM Server runs in foreground (Ctrl+C to stop)
 python server.py
