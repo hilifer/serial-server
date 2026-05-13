@@ -93,8 +93,10 @@ function renderFlowDiagram(){
   // Where PV merge lands on the horizontal BUS — between the left column
   // and DC/DC so the PV merged tail doesn't pass through AC/DC vertically.
   const pvBusX=(BX.acdc.r+BX.dcdc.l)/2;
-  // DC pile attaches to the BUS at DC/DC's right edge (no extension).
-  const busRightEnd=BX.dcdc.r;
+  // DC pile attaches to the BUS at DC/DC's LEFT edge — i.e., the BUS
+  // horizontal stops exactly where it meets DC/DC, and the DC pile feed
+  // arrives at that same endpoint from below.
+  const busRightEnd=BX.dcdc.l;
 
   // Path builders — each outer node enters its target block on a specific edge.
   // 电网 → AC/DC LEFT side (line wraps around from upper-left, enters from left)
@@ -106,7 +108,9 @@ function renderFlowDiagram(){
   // Each PV emits an L-shaped path that converges at (CX, mergeY) then runs
   // down the shared segment to (CX, acdcCY). The overlapping shared segment
   // gives the visual "two PVs feeding one bus" effect.
-  const pvMergeY=N.pv1.y+R+(midY-(N.pv1.y+R))*.45;
+  // Merge level pushed up close to the PV nodes so the horizontal segment
+  // sits ABOVE the wrapper top border, not crossing it.
+  const pvMergeY=N.pv1.y+R+(BX.acdc.t-bH*.45-(N.pv1.y+R))*.5;
   function pv1Path(){
     return `M${N.pv1.x},${N.pv1.y+R} L${N.pv1.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
   }
@@ -121,15 +125,16 @@ function renderFlowDiagram(){
     const ty=BX.dcdc.cy-BX.dcdc.h*.30;
     return `M${sx},${sy} L${sx},${ty} L${BX.dcdc.r},${ty}`;
   }
-  // 直流桩 → up to the BUS horizontal extension. Path turns horizontal
-  // BELOW the BUS (in the bottom-area), then takes a short vertical
-  // upward into busRightEnd — same shape as the office/ac merge, so the
-  // line approaches the BUS cleanly from below instead of running along
-  // midY across the diagram.
+  // 直流桩 → up to the BUS endpoint at DC/DC's LEFT edge. Path goes UP
+  // from the pile, LEFT under DC/DC (well below DC/DC.b), UP through
+  // a column OFFSET slightly to the left of DC/DC.l so it doesn't run
+  // along the block's left border, then a short RIGHT into the BUS
+  // endpoint. Keeps the line clearly visible against the block edges.
   function dcPath(){
     const sx=N.dc.x, sy=N.dc.y-N.dc.r;
-    const jy=midY+(sy-midY)*.45;
-    return `M${sx},${sy} L${sx},${jy} L${busRightEnd},${jy} L${busRightEnd},${midY}`;
+    const jy=BX.dcac.b+(sy-BX.dcac.b)*.45;
+    const vx=busRightEnd-Math.max(6,bW*.10);
+    return `M${sx},${sy} L${sx},${jy} L${vx},${jy} L${vx},${midY} L${busRightEnd},${midY}`;
   }
   // 办公室 + 交流桩 → MERGE → up to DC/AC BOTTOM
   const acMergeY=BX.dcac.b+(N.ac.y-N.ac.r-BX.dcac.b)*.45;
