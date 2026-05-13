@@ -43,49 +43,96 @@ function renderFlowDiagram(){
   const d1=W*.30,d2=W*.12,d3=W*.26;
   const R=Math.min(W*.06,H*.09,50);
   const RB=Math.min(W*.065,H*.095,55);
-  const RW=Math.min(W*.09,75),RH=Math.min(H*.06,35);
 
+  // Outer nodes — unchanged from v1.0.0 layout.
   const N={
     grid:   {x:CX-d1,y:topY,icon:'⚡',name:'电网',bc:'#ff6b6b',lc:'#ffcc44',r:R},
     pv1:    {x:CX-d2,y:topY,icon:'☀️',name:'光伏1',bc:'#ff9500',lc:'#ffdd55',r:R},
     pv2:    {x:CX+d2,y:topY,icon:'☀️',name:'光伏2',bc:'#ff9500',lc:'#ffdd55',r:R},
     storage:{x:CX+d1,y:topY,icon:'🔋',name:'储能',bc:'#00ffff',lc:'#88ffff',r:R},
-    center: {x:CX,y:midY,name:'光储系统',bc:'#3b82f6',isRect:true},
     office: {x:CX-d3,y:botY,icon:'💻',name:'办公室',bc:'#4ecdc4',lc:'#bbddff',r:RB},
     ac:     {x:CX,y:botY,icon:'🚗',name:'交流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
     dc:     {x:CX+d3,y:botY,icon:'🚗',name:'直流充电桩',bc:'#ff9500',lc:'#ffdd55',r:RB},
   };
 
+  // Center: three converter blocks around a red DC busbar.
+  //   AC/DC (small, top-left of center)  ┐
+  //   DC/AC (small, bottom-left)         ├─── BUS ─── DC/DC (tall, right)
+  // Sizes scale with viewport so the layout works on any resolution.
+  const bW=Math.min(W*.085,70);
+  const bHs=Math.min(H*.075,46);
+  const bHt=Math.min(H*.24,140);
+  const leftCX=CX-bW*.95;
+  const rightCX=CX+bW*.95;
+  const acdcCY=midY-bHs*1.35;
+  const dcacCY=midY+bHs*1.35;
+  const BX={
+    acdc:{cx:leftCX, cy:acdcCY, w:bW, h:bHs,
+          l:leftCX-bW/2, t:acdcCY-bHs/2, r:leftCX+bW/2, b:acdcCY+bHs/2,
+          label:'AC/DC'},
+    dcac:{cx:leftCX, cy:dcacCY, w:bW, h:bHs,
+          l:leftCX-bW/2, t:dcacCY-bHs/2, r:leftCX+bW/2, b:dcacCY+bHs/2,
+          label:'DC/AC'},
+    dcdc:{cx:rightCX, cy:midY, w:bW, h:bHt,
+          l:rightCX-bW/2, t:midY-bHt/2, r:rightCX+bW/2, b:midY+bHt/2,
+          label:'DC/DC'},
+  };
+  // Red BUS busbar geometry — vertical strip at busX joins AC/DC + DC/AC,
+  // then a horizontal stub crosses to DC/DC's left edge at midY.
+  const busX=(BX.acdc.r+BX.dcdc.l)/2;
+
+  // Path builders — each external edge now lands on a *specific* port
+  // on a *specific* block, instead of all converging to a single center.
+  // 电网 → AC/DC top
   function gridPath(){
-    const x=N.grid.x,y1=N.grid.y+R,tx=CX-RW,ty=midY;
-    return `M${x},${y1} L${x},${ty} L${tx},${ty}`;
+    const sx=N.grid.x, sy=N.grid.y+R, tx=BX.acdc.cx, ty=BX.acdc.t;
+    const jy=sy+(ty-sy)*.6;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
   }
-  function pvPath(node){
-    const x=node.x,y1=node.y+R,y2=midY-RH;
-    const jy=y1+(y2-y1)*.4;
-    if(Math.abs(x-CX)<3)return `M${x},${y1} L${x},${y2}`;
-    return `M${x},${y1} L${x},${jy} L${CX},${jy} L${CX},${y2}`;
+  // 光伏1 → DC/DC top (left third)
+  function pv1Path(){
+    const sx=N.pv1.x, sy=N.pv1.y+R, tx=BX.dcdc.l+BX.dcdc.w*.3, ty=BX.dcdc.t;
+    const jy=sy+(ty-sy)*.55;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
   }
-  // 光储系统 ↔ 储能 (bidirectional)
+  // 光伏2 → DC/DC top (right third)
+  function pv2Path(){
+    const sx=N.pv2.x, sy=N.pv2.y+R, tx=BX.dcdc.l+BX.dcdc.w*.7, ty=BX.dcdc.t;
+    const jy=sy+(ty-sy)*.55;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
+  }
+  // 储能 → DC/DC right (upper quarter)
   function storagePath(){
-    const tx=CX+RW,ty=midY,x=N.storage.x,y2=N.storage.y+R;
-    return `M${tx},${ty} L${x},${ty} L${x},${y2}`;
+    const sx=N.storage.x, sy=N.storage.y+R, tx=BX.dcdc.r, ty=BX.dcdc.cy-BX.dcdc.h*.25;
+    return `M${sx},${sy} L${sx},${ty} L${tx},${ty}`;
   }
-  function botPath(node){
-    const x=node.x,y1=midY+RH,y2=node.y-node.r;
-    const jy=y1+(y2-y1)*.45;
-    if(Math.abs(x-CX)<3)return `M${CX},${y1} L${x},${y2}`;
-    return `M${CX},${y1} L${CX},${jy} L${x},${jy} L${x},${y2}`;
+  // 直流桩 → DC/DC bottom (right third)
+  function dcPath(){
+    const sx=N.dc.x, sy=N.dc.y-N.dc.r, tx=BX.dcdc.l+BX.dcdc.w*.7, ty=BX.dcdc.b;
+    const jy=ty+(sy-ty)*.45;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
+  }
+  // 交流桩 → DC/AC bottom (right side)
+  function acPath(){
+    const sx=N.ac.x, sy=N.ac.y-N.ac.r, tx=BX.dcac.cx+BX.dcac.w*.2, ty=BX.dcac.b;
+    const jy=ty+(sy-ty)*.45;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
+  }
+  // 办公室 → DC/AC bottom (left side)
+  function officePath(){
+    const sx=N.office.x, sy=N.office.y-N.office.r, tx=BX.dcac.cx-BX.dcac.w*.2, ty=BX.dcac.b;
+    const jy=ty+(sy-ty)*.45;
+    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
   }
 
   const edges=[
     {id:'eGrid',path:gridPath(),type:'grid-line',pk:'grid',bidir:true},
-    {id:'ePv1',path:pvPath(N.pv1),type:'solar',pk:'pv1'},
-    {id:'ePv2',path:pvPath(N.pv2),type:'solar',pk:'pv2'},
+    {id:'ePv1',path:pv1Path(),type:'solar',pk:'pv1'},
+    {id:'ePv2',path:pv2Path(),type:'solar',pk:'pv2'},
     {id:'eStor',path:storagePath(),type:'storage',pk:'storage',bidir:true},
-    {id:'eDc',path:botPath(N.dc),type:'charge-dc',pk:'dc'},
-    {id:'eAc',path:botPath(N.ac),type:'charge-ac',pk:'ac'},
-    {id:'eOff',path:botPath(N.office),type:'office-line',pk:'office'},
+    {id:'eDc',path:dcPath(),type:'charge-dc',pk:'dc'},
+    {id:'eAc',path:acPath(),type:'charge-ac',pk:'ac'},
+    {id:'eOff',path:officePath(),type:'office-line',pk:'office'},
   ];
 
   let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
@@ -108,20 +155,35 @@ function renderFlowDiagram(){
     }
   });
 
+  // Red BUS busbar — solid (not dashed/animated), drawn ABOVE flow edges
+  // but BELOW block rectangles so it visually "enters" each block.
+  const busColor='#ef4444', busW=3.5;
+  svg+=`<line x1="${BX.acdc.r}" y1="${BX.acdc.cy}" x2="${busX}" y2="${BX.acdc.cy}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${BX.dcac.r}" y1="${BX.dcac.cy}" x2="${busX}" y2="${BX.dcac.cy}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${busX}" y1="${BX.acdc.cy}" x2="${busX}" y2="${BX.dcac.cy}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${busX}" y1="${midY}" x2="${BX.dcdc.l}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+
+  // Three converter blocks — each is a dark blue tile with a diagonal
+  // hairline separating the input-side label (top-right) from the
+  // output-side label (bottom-left). Matches the "AC↗DC" visual style.
+  Object.values(BX).forEach(b=>{
+    const parts=b.label.split('/');
+    const fs=Math.max(9,Math.min(b.w*.32,14));
+    svg+=`<rect x="${b.l}" y="${b.t}" width="${b.w}" height="${b.h}" rx="4" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>`;
+    svg+=`<line x1="${b.l+3}" y1="${b.b-3}" x2="${b.r-3}" y2="${b.t+3}" stroke="#7ec0ee" stroke-width="1.5" opacity="0.7"/>`;
+    svg+=`<text x="${b.r-5}" y="${b.t+fs+3}" text-anchor="end" font-size="${fs}" fill="#fff" font-weight="bold">${parts[0]}</text>`;
+    svg+=`<text x="${b.l+5}" y="${b.b-5}" text-anchor="start" font-size="${fs}" fill="#fff" font-weight="bold">${parts[1]}</text>`;
+  });
+
   const fs=Math.max(10,Math.min(R*.55,22));
   Object.entries(N).forEach(([k,n])=>{
     const addrMap={pv1:10,pv2:11,grid:1,storage:6,dc:8,ac:3,office:4};
     const addr=addrMap[k];
     const clickStyle=addr?'cursor:pointer':'';
     svg+=`<g class="flow-node-group"${addr?' data-addr="'+addr+'"':''} style="--node-color:${n.bc};${clickStyle}">`;
-    if(n.isRect){
-      svg+=`<rect x="${n.x-RW}" y="${n.y-RH}" width="${RW*2}" height="${RH*2}" rx="6" fill="rgba(0,20,60,.9)" stroke="${n.bc}" stroke-width="2"/>`;
-      svg+=`<text x="${n.x}" y="${n.y+5}" text-anchor="middle" font-size="${fs*.7}" fill="#00d4ff" font-weight="bold">${n.name}</text>`;
-    }else{
-      svg+=`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="rgba(0,20,60,.9)" stroke="${n.bc}" stroke-width="2"/>`;
-      svg+=`<text x="${n.x}" y="${n.y-n.r*.1}" text-anchor="middle" font-size="${fs}">${n.icon}</text>`;
-      svg+=`<text x="${n.x}" y="${n.y+n.r*.45}" text-anchor="middle" font-size="${Math.max(9,fs*.45)}" fill="#fff" font-weight="bold">${n.name}</text>`;
-    }
+    svg+=`<circle cx="${n.x}" cy="${n.y}" r="${n.r}" fill="rgba(0,20,60,.9)" stroke="${n.bc}" stroke-width="2"/>`;
+    svg+=`<text x="${n.x}" y="${n.y-n.r*.1}" text-anchor="middle" font-size="${fs}">${n.icon}</text>`;
+    svg+=`<text x="${n.x}" y="${n.y+n.r*.45}" text-anchor="middle" font-size="${Math.max(9,fs*.45)}" fill="#fff" font-weight="bold">${n.name}</text>`;
     svg+=`</g>`;
   });
 
