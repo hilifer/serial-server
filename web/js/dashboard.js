@@ -83,10 +83,17 @@ function renderFlowDiagram(){
           l:rightCX-bW/2, t:midY-bH/2,   r:rightCX+bW/2, b:midY+bH/2,
           label:'DC/DC'},
   };
-  // BUS junction sits ON the right edge of left column — no horizontal
-  // stubs, so the shape is pure |— (vertical between AC/DC & DC/AC,
-  // then a single horizontal out to DC/DC at midY).
-  const busX=BX.acdc.r;
+  // BUS junction lives at the CENTER X of the left column: vertical leg
+  // is the line connecting the middle of AC/DC's bottom edge to the
+  // middle of DC/AC's top edge (so the |— sits cleanly in the gap, not
+  // over the block borders). Horizontal leg branches off at midY,
+  // passes through DC/DC and continues past its right side so the DC
+  // pile can also tap into the BUS instead of entering DC/DC's edge.
+  const busX=BX.acdc.cx;
+  // Where PV merge lands on the horizontal BUS — between the left column
+  // and DC/DC so the PV merged tail doesn't pass through AC/DC vertically.
+  const pvBusX=(BX.acdc.r+BX.dcdc.l)/2;
+  const busRightEnd=BX.dcdc.r+Math.max(22,bW*.4);
 
   // Path builders — each outer node enters its target block on a specific edge.
   // 电网 → AC/DC LEFT side (line wraps around from upper-left, enters from left)
@@ -100,21 +107,28 @@ function renderFlowDiagram(){
   // gives the visual "two PVs feeding one bus" effect.
   const pvMergeY=N.pv1.y+R+(midY-(N.pv1.y+R))*.45;
   function pv1Path(){
-    return `M${N.pv1.x},${N.pv1.y+R} L${N.pv1.x},${pvMergeY} L${busX},${pvMergeY} L${busX},${midY}`;
+    return `M${N.pv1.x},${N.pv1.y+R} L${N.pv1.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
   }
   function pv2Path(){
-    return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${busX},${pvMergeY} L${busX},${midY}`;
+    return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
   }
-  // 储能 → DC/DC RIGHT side (centered)
+  // 储能 → DC/DC RIGHT side, upper portion (NOT at midY — that's where
+  // the BUS horizontal runs, so we deliberately offset to keep storage's
+  // own flow line visually distinct from the BUS bar).
   function storagePath(){
-    const sx=N.storage.x, sy=N.storage.y+R, tx=BX.dcdc.r, ty=BX.dcdc.cy;
-    return `M${sx},${sy} L${sx},${ty} L${tx},${ty}`;
+    const sx=N.storage.x, sy=N.storage.y+R;
+    const ty=BX.dcdc.cy-BX.dcdc.h*.30;
+    return `M${sx},${sy} L${sx},${ty} L${BX.dcdc.r},${ty}`;
   }
-  // 直流桩 → DC/DC BOTTOM
+  // 直流桩 → up to the BUS horizontal extension. Path turns horizontal
+  // BELOW the BUS (in the bottom-area), then takes a short vertical
+  // upward into busRightEnd — same shape as the office/ac merge, so the
+  // line approaches the BUS cleanly from below instead of running along
+  // midY across the diagram.
   function dcPath(){
-    const sx=N.dc.x, sy=N.dc.y-N.dc.r, tx=BX.dcdc.cx, ty=BX.dcdc.b;
-    const jy=ty+(sy-ty)*.45;
-    return `M${sx},${sy} L${sx},${jy} L${tx},${jy} L${tx},${ty}`;
+    const sx=N.dc.x, sy=N.dc.y-N.dc.r;
+    const jy=midY+(sy-midY)*.45;
+    return `M${sx},${sy} L${sx},${jy} L${busRightEnd},${jy} L${busRightEnd},${midY}`;
   }
   // 办公室 + 交流桩 → MERGE → up to DC/AC BOTTOM
   const acMergeY=BX.dcac.b+(N.ac.y-N.ac.r-BX.dcac.b)*.45;
@@ -178,12 +192,14 @@ function renderFlowDiagram(){
     svg+=`<text x="${b.l+b.w*.72}" y="${b.t+b.h*.74}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[1]}</text>`;
   });
 
-  // Red BUS busbar — pure |— shape, drawn ON TOP of the three blocks so
-  // the vertical leg spans the full assembly height (AC/DC top → DC/AC
-  // bottom) without being chopped off by the block fills underneath.
+  // Red BUS busbar — pure |— shape, drawn ON TOP of the three blocks.
+  // Vertical leg connects the MIDDLE of AC/DC's bottom edge to the MIDDLE
+  // of DC/AC's top edge (sitting in the gap between them at center X).
+  // Horizontal leg branches off at midY, passes through DC/DC interior,
+  // and continues out past DC/DC's right side to receive the DC pile feed.
   const busColor='#ef4444', busW=3.5;
-  svg+=`<line x1="${busX}" y1="${BX.acdc.t}" x2="${busX}" y2="${BX.dcac.b}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
-  svg+=`<line x1="${busX}" y1="${midY}" x2="${BX.dcdc.l}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${busX}" y1="${BX.acdc.b}" x2="${busX}" y2="${BX.dcac.t}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${busX}" y1="${midY}" x2="${busRightEnd}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
 
   const fs=Math.max(10,Math.min(R*.55,22));
   Object.entries(N).forEach(([k,n])=>{
