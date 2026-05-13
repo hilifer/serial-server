@@ -87,13 +87,14 @@ function renderFlowDiagram(){
   // is the line connecting the middle of AC/DC's bottom edge to the
   // middle of DC/AC's top edge (so the |— sits cleanly in the gap, not
   // over the block borders). Horizontal leg branches off at midY,
-  // passes through DC/DC and continues past its right side so the DC
-  // pile can also tap into the BUS instead of entering DC/DC's edge.
+  // crosses through DC/DC and STOPS at its right edge — DC pile feeds
+  // into the BUS by coming up from below to that exact endpoint.
   const busX=BX.acdc.cx;
   // Where PV merge lands on the horizontal BUS — between the left column
   // and DC/DC so the PV merged tail doesn't pass through AC/DC vertically.
   const pvBusX=(BX.acdc.r+BX.dcdc.l)/2;
-  const busRightEnd=BX.dcdc.r+Math.max(22,bW*.4);
+  // DC pile attaches to the BUS at DC/DC's right edge (no extension).
+  const busRightEnd=BX.dcdc.r;
 
   // Path builders — each outer node enters its target block on a specific edge.
   // 电网 → AC/DC LEFT side (line wraps around from upper-left, enters from left)
