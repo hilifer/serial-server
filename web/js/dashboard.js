@@ -117,16 +117,15 @@ function renderFlowDiagram(){
   function pv2Path(){
     return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
   }
-  // 储能 → DC/DC RIGHT side, upper portion. Path direction is
+  // 储能 → DC/DC RIGHT side, vertical center. Path direction is
   // CENTER → STORAGE (not the reverse) so the existing arrow logic in
   // updateEdgeStyles still works: sP>0 (charging) lights marker-end at
   // the storage node, sP<0 (discharging) lights marker-start at DC/DC.
-  // Offset y to upper portion keeps the line visually distinct from
-  // the BUS horizontal that runs across midY.
+  // BUS horizontal now stops at DC/DC.left, so the right edge at midY
+  // is free — storage can connect there cleanly.
   function storagePath(){
     const sx=N.storage.x, sy=N.storage.y+R;
-    const ty=BX.dcdc.cy-BX.dcdc.h*.30;
-    return `M${BX.dcdc.r},${ty} L${sx},${ty} L${sx},${sy}`;
+    return `M${BX.dcdc.r},${BX.dcdc.cy} L${sx},${BX.dcdc.cy} L${sx},${sy}`;
   }
   // 直流桩 → up to the BUS endpoint at DC/DC's LEFT edge. Path is drawn
   // BUS → pile so marker-end stays on the pile side (consistent with
