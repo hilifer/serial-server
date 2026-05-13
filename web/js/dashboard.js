@@ -162,19 +162,19 @@ function renderFlowDiagram(){
   svg+=`<line x1="${busX}" y1="${BX.acdc.cy}" x2="${busX}" y2="${BX.dcac.cy}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
   svg+=`<line x1="${busX}" y1="${midY}" x2="${BX.dcdc.l}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
 
-  // Three converter blocks — uniform size, dark blue with a backslash "\"
-  // diagonal hairline. Labels sit *inside* their respective half-triangles
-  // (deep in the corners) so the diagonal visually separates them rather
-  // than running through them.
+  // Three converter blocks — uniform size, dark blue with a forward-slash
+  // "/" diagonal hairline. The label reads naturally as e.g. "AC/DC":
+  // first part sits in the UPPER-LEFT half-triangle, second part in the
+  // LOWER-RIGHT half-triangle, separated by the diagonal.
   Object.values(BX).forEach(b=>{
     const parts=b.label.split('/');
     const fs=Math.max(10,Math.min(b.w*.32,15));
     svg+=`<rect x="${b.l}" y="${b.t}" width="${b.w}" height="${b.h}" rx="4" fill="#1e3a8a" stroke="#3b82f6" stroke-width="2"/>`;
-    svg+=`<line x1="${b.l+4}" y1="${b.t+4}" x2="${b.r-4}" y2="${b.b-4}" stroke="#fff" stroke-width="1.5" opacity="0.9"/>`;
-    // First label in upper-right triangle (above the "\" diagonal)
-    svg+=`<text x="${b.l+b.w*.72}" y="${b.t+b.h*.36}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[0]}</text>`;
-    // Second label in lower-left triangle (below the "\" diagonal)
-    svg+=`<text x="${b.l+b.w*.28}" y="${b.t+b.h*.74}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[1]}</text>`;
+    svg+=`<line x1="${b.l+4}" y1="${b.b-4}" x2="${b.r-4}" y2="${b.t+4}" stroke="#fff" stroke-width="1.5" opacity="0.9"/>`;
+    // First label in upper-LEFT triangle (above the "/" diagonal)
+    svg+=`<text x="${b.l+b.w*.28}" y="${b.t+b.h*.36}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[0]}</text>`;
+    // Second label in lower-RIGHT triangle (below the "/" diagonal)
+    svg+=`<text x="${b.l+b.w*.72}" y="${b.t+b.h*.74}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[1]}</text>`;
   });
 
   const fs=Math.max(10,Math.min(R*.55,22));
