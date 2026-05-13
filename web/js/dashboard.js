@@ -117,32 +117,34 @@ function renderFlowDiagram(){
   function pv2Path(){
     return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
   }
-  // 储能 → DC/DC RIGHT side, upper portion (NOT at midY — that's where
-  // the BUS horizontal runs, so we deliberately offset to keep storage's
-  // own flow line visually distinct from the BUS bar).
+  // 储能 → DC/DC RIGHT side, upper portion. Path direction is
+  // CENTER → STORAGE (not the reverse) so the existing arrow logic in
+  // updateEdgeStyles still works: sP>0 (charging) lights marker-end at
+  // the storage node, sP<0 (discharging) lights marker-start at DC/DC.
+  // Offset y to upper portion keeps the line visually distinct from
+  // the BUS horizontal that runs across midY.
   function storagePath(){
     const sx=N.storage.x, sy=N.storage.y+R;
     const ty=BX.dcdc.cy-BX.dcdc.h*.30;
-    return `M${sx},${sy} L${sx},${ty} L${BX.dcdc.r},${ty}`;
+    return `M${BX.dcdc.r},${ty} L${sx},${ty} L${sx},${sy}`;
   }
-  // 直流桩 → up to the BUS endpoint at DC/DC's LEFT edge. Path goes UP
-  // from the pile, LEFT under DC/DC (well below DC/DC.b), UP through
-  // a column OFFSET slightly to the left of DC/DC.l so it doesn't run
-  // along the block's left border, then a short RIGHT into the BUS
-  // endpoint. Keeps the line clearly visible against the block edges.
+  // 直流桩 → up to the BUS endpoint at DC/DC's LEFT edge. Path is drawn
+  // BUS → pile so marker-end stays on the pile side (consistent with
+  // grid/pv/charge directions used by updateEdgeStyles).
   function dcPath(){
     const sx=N.dc.x, sy=N.dc.y-N.dc.r;
     const jy=BX.dcac.b+(sy-BX.dcac.b)*.45;
     const vx=busRightEnd-Math.max(6,bW*.10);
-    return `M${sx},${sy} L${sx},${jy} L${vx},${jy} L${vx},${midY} L${busRightEnd},${midY}`;
+    return `M${busRightEnd},${midY} L${vx},${midY} L${vx},${jy} L${sx},${jy} L${sx},${sy}`;
   }
-  // 办公室 + 交流桩 → MERGE → up to DC/AC BOTTOM
+  // 办公室 + 交流桩 → MERGE → up to DC/AC BOTTOM, both drawn DC/AC → pile
+  // so marker-end ends at the outer node (matches original arrow logic).
   const acMergeY=BX.dcac.b+(N.ac.y-N.ac.r-BX.dcac.b)*.45;
   function acPath(){
-    return `M${N.ac.x},${N.ac.y-N.ac.r} L${N.ac.x},${acMergeY} L${BX.dcac.cx},${acMergeY} L${BX.dcac.cx},${BX.dcac.b}`;
+    return `M${BX.dcac.cx},${BX.dcac.b} L${BX.dcac.cx},${acMergeY} L${N.ac.x},${acMergeY} L${N.ac.x},${N.ac.y-N.ac.r}`;
   }
   function officePath(){
-    return `M${N.office.x},${N.office.y-N.office.r} L${N.office.x},${acMergeY} L${BX.dcac.cx},${acMergeY} L${BX.dcac.cx},${BX.dcac.b}`;
+    return `M${BX.dcac.cx},${BX.dcac.b} L${BX.dcac.cx},${acMergeY} L${N.office.x},${acMergeY} L${N.office.x},${N.office.y-N.office.r}`;
   }
 
   const edges=[
