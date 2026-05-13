@@ -145,6 +145,14 @@ function renderFlowDiagram(){
       </marker>
     </defs>`;
 
+  // Outer panel that bundles AC/DC + DC/AC + DC/DC into one visual
+  // assembly ("光储系统" enclosure). Drawn FIRST so flow edges, the BUS,
+  // and the three inner block rectangles all render on top of it.
+  const panPad=Math.max(12,bH*.30);
+  const panL=BX.acdc.l-panPad, panT=BX.acdc.t-panPad;
+  const panR=BX.dcdc.r+panPad, panB=BX.dcac.b+panPad;
+  svg+=`<rect x="${panL}" y="${panT}" width="${panR-panL}" height="${panB-panT}" rx="10" fill="rgba(15,30,80,.55)" stroke="#60a5fa" stroke-width="1.5" opacity="0.85"/>`;
+
   edges.forEach(e=>{
     const cls=edgeClass('flow-edge '+e.type,flowPower[e.pk]);
     if(e.bidir){
@@ -154,13 +162,6 @@ function renderFlowDiagram(){
       svg+=`<path id="${e.id}" d="${e.path}" class="${cls}"/>`;
     }
   });
-
-  // Red BUS busbar — pure |— shape. The vertical leg lies ON the right
-  // edge of the left column (busX = acdc.r = dcac.r, no stubs), and the
-  // horizontal leg branches off at midY out to DC/DC's left edge.
-  const busColor='#ef4444', busW=3.5;
-  svg+=`<line x1="${busX}" y1="${BX.acdc.cy}" x2="${busX}" y2="${BX.dcac.cy}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
-  svg+=`<line x1="${busX}" y1="${midY}" x2="${BX.dcdc.l}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
 
   // Three converter blocks — uniform size, dark blue with a forward-slash
   // "/" diagonal hairline. The label reads naturally as e.g. "AC/DC":
@@ -176,6 +177,13 @@ function renderFlowDiagram(){
     // Second label in lower-RIGHT triangle (below the "/" diagonal)
     svg+=`<text x="${b.l+b.w*.72}" y="${b.t+b.h*.74}" text-anchor="middle" dominant-baseline="middle" font-size="${fs}" fill="#fff" font-weight="bold">${parts[1]}</text>`;
   });
+
+  // Red BUS busbar — pure |— shape, drawn ON TOP of the three blocks so
+  // the vertical leg spans the full assembly height (AC/DC top → DC/AC
+  // bottom) without being chopped off by the block fills underneath.
+  const busColor='#ef4444', busW=3.5;
+  svg+=`<line x1="${busX}" y1="${BX.acdc.t}" x2="${busX}" y2="${BX.dcac.b}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
+  svg+=`<line x1="${busX}" y1="${midY}" x2="${BX.dcdc.l}" y2="${midY}" stroke="${busColor}" stroke-width="${busW}" stroke-linecap="round"/>`;
 
   const fs=Math.max(10,Math.min(R*.55,22));
   Object.entries(N).forEach(([k,n])=>{
