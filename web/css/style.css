@@ -185,10 +185,10 @@ a{color:inherit;text-decoration:none}
 
 /* Inline ☀️ in the card header */
 .solar-icon-inline{
-  font-size:clamp(28px,3vw,42px);margin-right:clamp(6px,.7vw,12px);
+  font-size:clamp(18px,2vw,26px);margin-right:clamp(8px,1vw,16px);
   display:inline-block;animation:sunRotate 10s linear infinite;
   filter:drop-shadow(0 0 8px rgba(255,200,40,.7));
-  vertical-align:middle;
+  vertical-align:middle;flex-shrink:0;
 }
 @keyframes sunRotate{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
