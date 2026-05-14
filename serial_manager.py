@@ -22,6 +22,15 @@ import serial
 
 logger = logging.getLogger("serial-manager")
 
+# RS485 inter-frame timing for one Modbus/parking request-response.
+# These are held under the port lock, so every value here is also added
+# latency for every other caller of the bus. They are tuned for the
+# field hardware — change with care, ideally against a real meter.
+_PRE_TX_QUIET_S = 0.05      # settle time before draining stale bytes + TX
+_DRAIN_POLL_S = 0.02       # poll gap while draining leftover RX bytes
+_SLAVE_TURNAROUND_S = 0.08  # wait for the slave to start responding
+_RX_POLL_S = 0.01          # poll gap while assembling the response frame
+
 
 class PortStatus(Enum):
     DISCONNECTED = "disconnected"
@@ -88,38 +97,56 @@ class SerialManager:
         """Try to open the serial port. Returns True on success, False on failure.
 
         Never raises — logs the error and sets status to ERROR.
+
+        The actual serial.Serial() construction is done WITHOUT holding the
+        lock: opening a port (USB enumeration, driver init) can block for
+        seconds, and holding the lock across it would freeze every other
+        caller of this port (MQTT bridge, caches, API) for that whole time.
+        The opened handle is only swapped in under a brief lock.
         """
         with self._lock:
             if self._serial and self._serial.is_open:
                 self._status = PortStatus.CONNECTED
                 return True
-            try:
-                self._serial = serial.Serial(
-                    port=self.port,
-                    baudrate=self.baudrate,
-                    bytesize=self.bytesize,
-                    parity=self.parity,
-                    stopbits=self.stopbits,
-                    timeout=self.timeout,
-                )
-                self._status = PortStatus.CONNECTED
-                self._last_error = ""
-                logger.info("[%s] Serial port opened @ %d baud", self.port, self.baudrate)
-                return True
-            except serial.SerialException as e:
+
+        # --- blocking part, NO lock held ---
+        try:
+            new_serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                bytesize=self.bytesize,
+                parity=self.parity,
+                stopbits=self.stopbits,
+                timeout=self.timeout,
+            )
+        except (serial.SerialException, OSError) as e:
+            with self._lock:
                 self._status = PortStatus.ERROR
                 self._last_error = str(e)
-                logger.warning("[%s] Failed to open: %s", self.port, e)
-                return False
-            except OSError as e:
-                self._status = PortStatus.ERROR
-                self._last_error = str(e)
-                logger.warning("[%s] OS error opening port: %s", self.port, e)
-                return False
+            logger.warning("[%s] Failed to open: %s", self.port, e)
+            return False
+
+        # --- swap in under the lock, quick & non-blocking ---
+        with self._lock:
+            if self._serial and self._serial.is_open:
+                # Another thread won the race while we were opening — drop ours.
+                try:
+                    new_serial.close()
+                except Exception:
+                    pass
+            else:
+                self._serial = new_serial
+            self._status = PortStatus.CONNECTED
+            self._last_error = ""
+        logger.info("[%s] Serial port opened @ %d baud", self.port, self.baudrate)
+        return True
 
     def close(self):
-        with self._lock:
-            self._stop_reconnect()
+        # Stop reconnect thread first (no lock needed)
+        self._stop_reconnect()
+        # Try to acquire lock with timeout to avoid deadlock on exit
+        acquired = self._lock.acquire(timeout=2)
+        try:
             if self._serial and self._serial.is_open:
                 try:
                     self._serial.close()
@@ -128,6 +155,9 @@ class SerialManager:
                 logger.info("[%s] Serial port closed", self.port)
             self._serial = None
             self._status = PortStatus.DISCONNECTED
+        finally:
+            if acquired:
+                self._lock.release()
 
     def _handle_error(self, operation: str, error: Exception):
         """Handle a serial error: close port, set status, log."""
@@ -177,11 +207,15 @@ class SerialManager:
             self._reconnect_thread = None
 
     def _reconnect_loop(self):
-        """Background loop: try to reconnect when disconnected."""
+        """Background loop: try to reconnect when disconnected.
+
+        Does NOT hold the lock around _try_reconnect — open() now does its
+        own brief locking and runs the blocking serial.Serial() call lock-
+        free, so a slow/hung port open can't freeze the whole bus.
+        """
         while not self._stop_event.is_set():
             if not self.is_open:
-                with self._lock:
-                    self._try_reconnect()
+                self._try_reconnect()
             self._stop_event.wait(self.reconnect_interval)
 
     def lock(self):
@@ -277,17 +311,17 @@ class SerialManager:
         try:
             # Inter-frame gap: flush any leftover bytes from previous response,
             # then wait for bus to be quiet before sending new request.
-            time.sleep(0.05)
+            time.sleep(_PRE_TX_QUIET_S)
             # Drain any stale bytes still arriving
             while self._serial.in_waiting > 0:
                 self._serial.read(self._serial.in_waiting)
-                time.sleep(0.02)
+                time.sleep(_DRAIN_POLL_S)
             self._serial.reset_input_buffer()
             self._serial.write(request)
             logger.debug("[%s] TX: %s", self.port, request.hex())
 
             # Wait for slave to start responding
-            time.sleep(0.08)
+            time.sleep(_SLAVE_TURNAROUND_S)
 
             response = b""
             expected_len = None
@@ -327,14 +361,14 @@ class SerialManager:
                         response = response[:expected_len]
                         break
 
-                    time.sleep(0.01)
+                    time.sleep(_RX_POLL_S)
                 elif response:
                     if expected_len is not None and len(response) < expected_len:
-                        time.sleep(0.01)
+                        time.sleep(_RX_POLL_S)
                         continue
                     break
                 else:
-                    time.sleep(0.01)
+                    time.sleep(_RX_POLL_S)
 
             if response:
                 logger.debug("[%s] RX: %s (%d/%s bytes)", self.port, response.hex(),

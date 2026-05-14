@@ -22,7 +22,9 @@ ALL_DEPS = {
 
 
 def ensure_deps():
-    """Install any missing dependencies. Skips if marker file exists."""
+    """Install any missing dependencies. Skips if frozen (PyInstaller) or marker exists."""
+    if getattr(sys, 'frozen', False):
+        return  # All deps are bundled in .exe
     if _MARKER.exists():
         return
 

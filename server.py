@@ -10,6 +10,7 @@ Both services share the same SerialManager instances per port,
 protected by RLock to prevent concurrent bus conflicts.
 """
 
+import os
 import signal
 import sys
 import threading
@@ -17,7 +18,11 @@ import time
 import logging
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ImportError:
+    yaml = None  # Not needed when config is hardcoded
+
 import paho.mqtt.client as mqtt
 
 from serial_manager import SerialManager, create_serial_manager
@@ -25,10 +30,53 @@ from serial_manager import SerialManager, create_serial_manager
 logger = logging.getLogger("serial-server")
 
 
+def _get_base_dir():
+    """Get base directory — works both as script and PyInstaller .exe"""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+
 def load_config(path: str = "config.yaml") -> dict:
-    config_path = Path(__file__).parent / path
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    # Try external config.yaml first (next to .exe or script)
+    config_path = _get_base_dir() / path
+    if not config_path.exists():
+        config_path = Path(sys.executable).parent / path  # next to .exe
+    if config_path.exists():
+        # A config.yaml exists — it MUST be honoured. If PyYAML is missing
+        # we used to silently fall through to the built-in defaults, which
+        # have different settings (e.g. MQTT bridge ON) and would quietly
+        # run the system mis-configured. Fail loudly instead.
+        if yaml is None:
+            raise RuntimeError(
+                f"找到了配置文件 {config_path}，但 PyYAML 未安装，无法读取。"
+                " 请运行: pip install pyyaml"
+            )
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    # No config.yaml at all — use built-in default configuration
+    return {
+        "mqtt": {
+            "broker": "localhost",
+            "port": 1883,
+            "ws_port": 9001,
+            "username": "",
+            "password": "",
+            "client_id_prefix": "serial-server",
+            "keepalive": 60,
+        },
+        "serial_ports": [
+            {"name": "COM31", "port": "COM31", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com31"},
+            {"name": "COM32", "port": "COM32", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com32"},
+            {"name": "COM33", "port": "COM33", "baudrate": 9600, "bytesize": 8,
+             "parity": "N", "stopbits": 1, "timeout": 0.1, "mqtt_topic_prefix": "serial/com33"},
+        ],
+        "parking": {"enabled": True, "poll_interval": 5},
+        "logging": {"level": "INFO", "file": "serial_server.log"},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -221,8 +269,16 @@ def setup_logging(config: dict):
 
     log_file = log_cfg.get("file")
     if log_file:
-        file_handler = logging.FileHandler(
-            Path(__file__).parent / log_file, encoding="utf-8"
+        from logging.handlers import TimedRotatingFileHandler
+        # Roll the active file at local midnight so each day gets its own
+        # `serial_server.log.YYYY-MM-DD`. Keep the last `backup_count` days
+        # of history; older rolls are deleted automatically.
+        backup_count = int(log_cfg.get("backup_count", 14))
+        file_handler = TimedRotatingFileHandler(
+            Path(__file__).parent / log_file,
+            when="midnight",
+            backupCount=backup_count,
+            encoding="utf-8",
         )
         file_handler.setFormatter(fmt)
         handlers.append(file_handler)
@@ -257,21 +313,69 @@ def main():
         # Start background reconnect loop
         mgr.start_reconnect_loop()
 
-    # 2. Start MQTT WS transparent bridge (non-blocking)
-    mqtt_server = MQTTSerialServer(config)
-    mqtt_server.start()
+    # 2. Start MQTT WS transparent bridge (non-blocking) — only if enabled.
+    # The bridge's _read_loop continuously reads each serial port to publish
+    # to MQTT topics; when this project doesn't actually use the MQTT side,
+    # disabling it removes a constant background consumer of the bus and
+    # noticeably reduces incomplete-frame errors.
+    if config.get("mqtt", {}).get("enabled", True):
+        mqtt_server = MQTTSerialServer(config)
+        mqtt_server.start()
+    else:
+        mqtt_server = None
+        logger.info("MQTT bridge disabled (config: mqtt.enabled=false)")
 
     # 3. Import and start Flask API (blocking)
-    from meter_api import app
+    from meter_api import (app, init_bms, init_meter_cache, init_parking_cache,
+                           init_odoo_cache, init_yearly_cache, stop_caches)
+    init_bms(config)
+    cache_cfg = config.get("cache", {})
+    init_meter_cache(scan_interval_s=float(cache_cfg.get("meter_interval", 2.0)))
+    init_parking_cache(scan_interval_s=float(cache_cfg.get("parking_interval", 2.0)))
+    init_odoo_cache(ttl_s=float(cache_cfg.get("odoo_ttl", 5.0)))
+    init_yearly_cache(refresh_interval_s=float(cache_cfg.get("yearly_refresh", 3600.0)))
+
+    _shutdown_done = threading.Event()
+
+    def _shutdown():
+        """Release every resource cleanly. Idempotent — safe to call from
+        both the signal handler and atexit. Stopping the cache threads and
+        closing the serial ports here means the COM ports are actually
+        released, so a fast restart doesn't hit 'port in use'.
+        """
+        if _shutdown_done.is_set():
+            return
+        _shutdown_done.set()
+        print("\n正在关闭...")
+        try:
+            stop_caches()
+        except Exception:
+            pass
+        if mqtt_server is not None:
+            try:
+                mqtt_server.stop()
+            except Exception:
+                pass
+        for mgr in serial_managers.values():
+            try:
+                mgr.close()
+            except Exception:
+                pass
+        logging.shutdown()
 
     def _signal_handler(sig, frame):
-        mqtt_server.stop()
-        for mgr in serial_managers.values():
-            mgr.close()
-        sys.exit(0)
+        _shutdown()
+        os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
+
+    # Windows: Flask threaded mode doesn't exit cleanly on Ctrl+C, so we
+    # still hard-exit — but run the proper cleanup first via atexit instead
+    # of a bare os._exit that would skip releasing the COM ports.
+    if sys.platform == 'win32':
+        import atexit
+        atexit.register(_shutdown)
 
     api_port = config.get("api", {}).get("port", 8000)
     logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)
@@ -279,4 +383,15 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n已停止")
+    except Exception as e:
+        print("\n" + "=" * 50)
+        print(f"  启动失败: {e}")
+        print("=" * 50)
+        import traceback
+        traceback.print_exc()
+        input("\n按回车键退出...")
+        sys.exit(1)

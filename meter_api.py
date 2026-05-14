@@ -16,6 +16,7 @@ Endpoints:
 """
 
 import logging
+import time
 import requests as http_requests
 
 from flask import Flask, jsonify, request, abort
@@ -41,7 +42,14 @@ from parking import (
     STATUS_NAMES, DISPLAY_MODE_NAMES, COLOR_NAMES,
 )
 
+from bms import BMSReader
+from meter_cache import MeterCache
+from parking_cache import ParkingCache
+from odoo_cache import OdooCache
+from yearly_cache import YearlyCache
+
 import os
+import sys
 
 logger = logging.getLogger("meter-api")
 
@@ -49,8 +57,109 @@ logger = logging.getLogger("meter-api")
 # Flask application — serve API + static web files
 # ---------------------------------------------------------------------------
 
-web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+def _get_base_dir():
+    """Get base directory — works both as script and PyInstaller .exe"""
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS  # PyInstaller temp dir
+    return os.path.dirname(os.path.abspath(__file__))
+
+web_dir = os.path.join(_get_base_dir(), "web")
 app = Flask(__name__, static_folder=web_dir, static_url_path="")
+
+# Caches — initialized by server.py via init_caches(cfg) after serial managers are up.
+_bms: "BMSReader | None" = None
+_meter_cache: "MeterCache | None" = None
+_parking_cache: "ParkingCache | None" = None
+_odoo_cache: "OdooCache | None" = None
+_yearly_cache: "YearlyCache | None" = None
+
+
+def init_meter_cache(scan_interval_s: float = 2.0) -> None:
+    global _meter_cache
+    def provider():
+        from state import serial_managers
+        return serial_managers.get("COM33")
+    _meter_cache = MeterCache(
+        meter_list=METERS,
+        reader_fn=_read_meter_realtime,
+        serial_mgr_provider=provider,
+        scan_interval_s=scan_interval_s,
+    )
+    _meter_cache.start()
+    logger.info("MeterCache started (%d meters, scan_interval=%.1fs)",
+                len(METERS), scan_interval_s)
+
+
+def init_parking_cache(scan_interval_s: float = 2.0) -> None:
+    global _parking_cache
+    by_port: dict[str, list] = {}
+    for s in PARKING_SPACES:
+        by_port.setdefault(s.com_port, []).append(s)
+
+    def provider(com_port: str):
+        from state import serial_managers
+        return serial_managers.get(com_port)
+
+    _parking_cache = ParkingCache(
+        spaces_by_port=by_port,
+        poll_fn=_poll_space_status,
+        serial_mgr_provider=provider,
+        scan_interval_s=scan_interval_s,
+    )
+    _parking_cache.start()
+    logger.info("ParkingCache started (%d spaces across %d ports)",
+                len(PARKING_SPACES), len(by_port))
+
+
+def init_odoo_cache(ttl_s: float = 5.0) -> None:
+    global _odoo_cache
+    _odoo_cache = OdooCache(ttl_s=ttl_s)
+    logger.info("OdooCache enabled (ttl=%.1fs)", ttl_s)
+
+
+def init_yearly_cache(refresh_interval_s: float = 3600.0) -> None:
+    global _yearly_cache
+    def provider():
+        from state import serial_managers
+        return serial_managers.get("COM33")
+    _yearly_cache = YearlyCache(
+        meter_list=METERS,
+        reader_fn=_read_meter_yearly,
+        serial_mgr_provider=provider,
+        refresh_interval_s=refresh_interval_s,
+    )
+    _yearly_cache.start()
+    logger.info("YearlyCache started (%d meters, refresh=%.0fs)",
+                len(METERS), refresh_interval_s)
+
+
+def init_bms(cfg: dict) -> None:
+    """Configure the battery BMS reader from the `bms` section of config.yaml."""
+    global _bms
+    b = (cfg or {}).get("bms") or {}
+    if not b.get("host"):
+        logger.info("BMS not configured (no bms.host); /battery/soc will return 503")
+        return
+    _bms = BMSReader(
+        host=b["host"],
+        port=int(b.get("port", 502)),
+        unit=int(b.get("unit", 5)),
+        soc_addr=int(b.get("soc_addr", 304)),
+        timeout=float(b.get("timeout", 2.0)),
+        cache_ttl=float(b.get("cache_ttl", 5.0)),
+    )
+    logger.info("BMS configured: %s:%d unit=%d reg=%d",
+                _bms.host, _bms.port, _bms.unit, _bms.soc_addr)
+
+
+def stop_caches() -> None:
+    """Signal every background cache thread to stop. Called on shutdown."""
+    for c in (_meter_cache, _parking_cache, _yearly_cache):
+        if c is not None:
+            try:
+                c.stop()
+            except Exception:
+                pass
 
 
 @app.route("/")
@@ -98,6 +207,12 @@ def get_meter(addr: int) -> MeterInfo:
 def handle_error(e):
     return jsonify({"error": e.description}), e.code
 
+@app.errorhandler(Exception)
+def handle_unexpected_error(e):
+    """Catch all unhandled exceptions — never crash the server."""
+    logger.error("Unhandled exception: %s", e, exc_info=True)
+    return jsonify({"error": "内部错误，请稍后重试"}), 500
+
 
 # ---------------------------------------------------------------------------
 # CORS support
@@ -143,14 +258,26 @@ def list_meters():
     ])
 
 
-@app.get("/meter/<int:addr>/realtime")
-def get_realtime(addr: int):
-    """Read all realtime parameters from a meter."""
-    meter = get_meter(addr)
-    ser = get_serial()
+@app.get("/battery/soc")
+def battery_soc():
+    """Read battery SOC from the BMS over Modbus TCP.
 
+    Returns: {ok, soc_pct}. 503 if BMS is unconfigured or unreachable.
+    """
+    if _bms is None:
+        abort(503, description="BMS 未配置 (config.yaml 中缺少 bms.host)")
+    soc = _bms.read_soc()
+    if soc is None:
+        abort(503, description=f"读取 BMS 失败: {_bms.last_error or 'unknown'}")
+    return jsonify({"ok": True, "soc_pct": max(0, min(100, int(soc)))})
+
+
+def _read_meter_realtime(ser, meter) -> dict:
+    """Do a full realtime scan of one meter. Holds ser.lock() for the entire
+    register burst so other callers don't interleave. Used both by the
+    /realtime endpoint (fallback) and by MeterCache's background thread.
+    """
     results = {}
-
     regs = get_realtime_regs(meter.meter_type)
 
     with ser.lock():
@@ -166,12 +293,51 @@ def get_realtime(addr: int):
             except Exception:
                 results[name] = {"value": None, "unit": rdef.unit, "error": "parse error"}
 
-    return jsonify({
-        "address": addr,
+        # DJSF: also read current month energy in same lock session
+        current_month = None
+        if meter.meter_type != MeterType.ADL400:
+            if meter.meter_type == MeterType.DJSF1352_RN_6:
+                fwd_reg, rev_reg = 12306, 12342
+            else:
+                fwd_reg, rev_reg = 2010, 2150
+            fwd_kwh = None
+            rev_kwh = None
+            data = safe_read_registers(ser, meter.slave_addr, fwd_reg, 2)
+            if data:
+                fwd_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+            data = safe_read_registers(ser, meter.slave_addr, rev_reg, 2)
+            if data:
+                rev_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+            current_month = {
+                "energy_forward_kwh": round(fwd_kwh, 3) if fwd_kwh is not None else None,
+                "energy_reverse_kwh": round(rev_kwh, 3) if rev_kwh is not None else None,
+            }
+
+    resp = {
+        "address": meter.slave_addr,
         "name": meter.name,
         "model": meter.model,
         "data": results,
-    })
+    }
+    if current_month:
+        resp["current_month"] = current_month
+    return resp
+
+
+@app.get("/meter/<int:addr>/realtime")
+def get_realtime(addr: int):
+    """Read all realtime parameters from a meter (served from MeterCache)."""
+    meter = get_meter(addr)
+    if _meter_cache is not None:
+        entry = _meter_cache.get(addr)
+        if entry and entry.get("payload"):
+            resp = dict(entry["payload"])
+            resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
+            resp["last_error"] = entry.get("error")
+            return jsonify(resp)
+        # Cache not warmed yet — fall through to direct read on first request.
+    ser = get_serial()
+    return jsonify(_read_meter_realtime(ser, meter))
 
 
 @app.get("/meter/<int:addr>/daily")
@@ -290,12 +456,52 @@ def get_monthly(addr: int):
         })
 
 
-@app.get("/meter/<int:addr>/yearly")
-def get_yearly(addr: int):
-    """Read yearly energy summary (aggregated from monthly data)."""
+@app.get("/meter/<int:addr>/current_month")
+def get_current_month(addr: int):
+    """Read current month energy (real-time accumulation, not frozen)."""
     meter = get_meter(addr)
     ser = get_serial()
 
+    if meter.meter_type == MeterType.ADL400:
+        abort(400, description="ADL400 does not support current month register")
+
+    fwd_kwh = None
+    rev_kwh = None
+
+    with ser.lock():
+        if meter.meter_type == MeterType.DJSF1352_RN_6:
+            fwd_reg, rev_reg = 12306, 12342
+        else:
+            fwd_reg, rev_reg = 2010, 2150
+
+        req = build_read_request(meter.slave_addr, fwd_reg, 2)
+        resp = ser.send_and_receive_unlocked(req)
+        data = parse_read_response(resp) if resp else None
+        if data:
+            fwd_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+
+        req = build_read_request(meter.slave_addr, rev_reg, 2)
+        resp = ser.send_and_receive_unlocked(req)
+        data = parse_read_response(resp) if resp else None
+        if data:
+            rev_kwh = parse_djsf_monthly_energy(data, meter.meter_type)
+
+    return jsonify({
+        "address": addr,
+        "name": meter.name,
+        "period": "current_month",
+        "energy_forward_kwh": round(fwd_kwh, 3) if fwd_kwh is not None else None,
+        "energy_reverse_kwh": round(rev_kwh, 3) if rev_kwh is not None else None,
+    })
+
+
+def _read_meter_yearly(ser, meter) -> dict:
+    """Heavy read: walks all 12 months of frozen energy data on this meter.
+
+    Extracted from /meter/{addr}/yearly so both the endpoint (cold-start
+    fallback) and YearlyCache can share the same logic. Holds ser.lock()
+    for the whole duration so the 12-month scan is atomic.
+    """
     if meter.meter_type == MeterType.ADL400:
         monthly_data = []
         total_energy = 0.0
@@ -316,23 +522,25 @@ def get_yearly(addr: int):
                     monthly_data.append(block)
                     total_energy += block["energy_active_total_kwh"]
 
-        return jsonify({
-            "address": addr,
+        return {
+            "address": meter.slave_addr,
             "name": meter.name,
             "model": meter.model,
             "period": "yearly",
             "total_energy_kwh": round(total_energy, 2),
             "months": monthly_data,
-        })
+        }
     else:
         total_fwd = 0.0
         total_rev = 0.0
         months = []
+        current_month = time.localtime().tm_mon  # 1-based
 
         with ser.lock():
             for m in range(1, 13):
                 fwd_kwh = None
                 rev_kwh = None
+                is_this_year = m < current_month
 
                 req_fwd = build_monthly_history_request_djsf(
                     meter.slave_addr, m, "forward")
@@ -341,7 +549,8 @@ def get_yearly(addr: int):
                     data = parse_read_response(resp) if resp else None
                     if data:
                         fwd_kwh = parse_djsf_monthly_energy(data)
-                        total_fwd += fwd_kwh
+                        if is_this_year:
+                            total_fwd += fwd_kwh
 
                 req_rev = build_monthly_history_request_djsf(
                     meter.slave_addr, m, "reverse")
@@ -350,23 +559,47 @@ def get_yearly(addr: int):
                     data = parse_read_response(resp) if resp else None
                     if data:
                         rev_kwh = parse_djsf_monthly_energy(data)
-                        total_rev += rev_kwh
+                        if is_this_year:
+                            total_rev += rev_kwh
 
                 months.append({
                     "month": m,
                     "energy_forward_kwh": fwd_kwh,
                     "energy_reverse_kwh": rev_kwh,
+                    "is_this_year": is_this_year,
                 })
 
-        return jsonify({
-            "address": addr,
+        return {
+            "address": meter.slave_addr,
             "name": meter.name,
             "model": meter.model,
             "period": "yearly",
             "total_forward_kwh": round(total_fwd, 2),
             "total_reverse_kwh": round(total_rev, 2),
             "months": months,
-        })
+        }
+
+
+@app.get("/meter/<int:addr>/yearly")
+def get_yearly(addr: int):
+    """Read yearly energy summary — served from YearlyCache only.
+
+    No direct-read fallback here on purpose: a yearly read walks all 12
+    months and holds the COM33 lock for several seconds, which would
+    starve MeterCache and the realtime endpoint. YearlyCache fires its
+    first scan immediately on startup, so data appears within minutes;
+    until then we return 503 rather than hammering the bus.
+    """
+    get_meter(addr)  # 404 if the address isn't configured
+    if _yearly_cache is None:
+        abort(503, description="年度缓存未启用")
+    entry = _yearly_cache.get(addr)
+    if not (entry and entry.get("payload")):
+        abort(503, description="年度数据正在初始化，请稍后重试")
+    resp = dict(entry["payload"])
+    resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
+    resp["last_error"] = entry.get("error")
+    return jsonify(resp)
 
 
 # ===========================================================================
@@ -434,10 +667,17 @@ def _odoo_call(model, method, domain, fields=None):
     return None
 
 
+def _odoo_call_cached(*args, **kwargs):
+    """Wrap _odoo_call with OdooCache if enabled; otherwise call through."""
+    if _odoo_cache is not None:
+        return _odoo_cache.get_or_fetch(_odoo_call, *args, **kwargs)
+    return _odoo_call(*args, **kwargs)
+
+
 @app.get("/charging/piles")
 def get_charging_piles():
-    """Proxy to Odoo: list charging piles."""
-    data = _odoo_call(
+    """Proxy to Odoo: list charging piles (via OdooCache)."""
+    data = _odoo_call_cached(
         "pile.charge_server", "search_read",
         [["station_id", "=", 3]],
         ["id", "name", "pile_code", "pile_type", "gun_count", "status",
@@ -450,8 +690,8 @@ def get_charging_piles():
 
 @app.get("/charging/guns")
 def get_charging_guns():
-    """Proxy to Odoo: list charging guns with status."""
-    data = _odoo_call(
+    """Proxy to Odoo: list charging guns with status (via OdooCache)."""
+    data = _odoo_call_cached(
         "gun.charge_server", "search_read",
         [["station_id", "=", 3]],
         ["id", "gun_code", "gun_number", "gun_type", "status", "pile_id",
@@ -499,34 +739,49 @@ def list_parking_spaces():
 
 @app.get("/parking/status")
 def get_all_parking_status():
-    """Poll parking spaces. Query: ?zone=A or ?zone=B"""
-    from state import serial_managers
+    """Return parking space status (from ParkingCache). Query: ?zone=A or ?zone=B"""
     zone = request.args.get("zone", "").upper()
 
-    spaces = PARKING_SPACES
-    if zone:
-        spaces = [s for s in spaces if s.zone == zone]
-
-    results = []
-    by_port: dict[str, list] = {}
-    for s in spaces:
-        by_port.setdefault(s.com_port, []).append(s)
-
-    for com_port, port_spaces in by_port.items():
-        mgr = serial_managers.get(com_port)
-        if mgr is None or not mgr.is_open:
-            for s in port_spaces:
-                results.append({"space_id": s.space_id, "zone": s.zone,
-                                "status": None, "label": "offline"})
-            continue
-
-        with mgr.lock():
-            for s in port_spaces:
-                val, label = _poll_space_status(mgr, s)
-                results.append({
-                    "space_id": s.space_id, "zone": s.zone,
-                    "status": val, "label": label,
-                })
+    if _parking_cache is not None:
+        all_entries = _parking_cache.get_all()
+        if not all_entries:
+            # Cache hasn't populated yet — return all as offline so UI can render
+            all_entries = [
+                {"space_id": s.space_id, "zone": s.zone,
+                 "status": None, "label": "warming_up", "ts": 0}
+                for s in PARKING_SPACES
+            ]
+        if zone:
+            all_entries = [e for e in all_entries if e.get("zone") == zone]
+        results = [
+            {"space_id": e["space_id"], "zone": e["zone"],
+             "status": e.get("status"), "label": e.get("label") or "offline"}
+            for e in all_entries
+        ]
+    else:
+        # Fallback: direct read (should not happen in normal operation)
+        from state import serial_managers
+        spaces = PARKING_SPACES
+        if zone:
+            spaces = [s for s in spaces if s.zone == zone]
+        results = []
+        by_port: dict[str, list] = {}
+        for s in spaces:
+            by_port.setdefault(s.com_port, []).append(s)
+        for com_port, port_spaces in by_port.items():
+            mgr = serial_managers.get(com_port)
+            if mgr is None or not mgr.is_open:
+                for s in port_spaces:
+                    results.append({"space_id": s.space_id, "zone": s.zone,
+                                    "status": None, "label": "offline"})
+                continue
+            with mgr.lock():
+                for s in port_spaces:
+                    val, label = _poll_space_status(mgr, s)
+                    results.append({
+                        "space_id": s.space_id, "zone": s.zone,
+                        "status": val, "label": label,
+                    })
 
     results.sort(key=lambda r: r["space_id"])
     online = [r for r in results if r["status"] is not None]

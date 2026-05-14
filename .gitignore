@@ -7,3 +7,8 @@ venv/
 .idea/
 .vscode/
 lizi/
+installer/build/
+build/
+dist/
+*.spec
+installer/output/

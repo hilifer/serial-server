@@ -1,0 +1,118 @@
+name: UI Screenshot
+
+on:
+  push:
+    branches:
+      - claude/festive-edison-W15j9
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Start serial-server (no hardware)
+        run: |
+          # server.py tolerates missing serial ports and broker; Flask still runs.
+          nohup python server.py > server.log 2>&1 &
+          echo $! > server.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8000/meters > /dev/null 2>&1; then
+              echo "Server up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:8000/meters > /dev/null 2>&1 || {
+            echo "Server failed to come up. Log:"
+            cat server.log
+            exit 1
+          }
+
+      - name: Screenshot with Playwright
+        run: |
+          mkdir -p screenshots
+          python <<'PY'
+          import asyncio
+          from playwright.async_api import async_playwright
+
+          TARGETS = [
+              ('/', 'index.png', 4000),
+              ('/detail.html', 'detail.png', 6000),
+          ]
+
+          async def main():
+              async with async_playwright() as p:
+                  browser = await p.chromium.launch()
+                  ctx = await browser.new_context(viewport={'width': 1920, 'height': 1080})
+                  page = await ctx.new_page()
+                  for path, out, wait_ms in TARGETS:
+                      print(f'Visiting http://127.0.0.1:8000{path}')
+                      try:
+                          await page.goto(f'http://127.0.0.1:8000{path}',
+                                           wait_until='domcontentloaded', timeout=15000)
+                      except Exception as e:
+                          print(f'goto error (continuing): {e}')
+                      await page.wait_for_timeout(wait_ms)
+                      await page.screenshot(path=f'screenshots/{out}', full_page=False)
+                      print(f'Saved screenshots/{out}')
+                  await browser.close()
+
+          asyncio.run(main())
+          PY
+          ls -la screenshots/
+
+      - name: Stop server
+        if: always()
+        run: |
+          kill "$(cat server.pid)" 2>/dev/null || true
+          echo "--- server.log (last 80) ---"
+          tail -80 server.log || true
+
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/*.png
+          if-no-files-found: warn
+
+      - name: Push screenshots to 'screenshots' branch
+        if: always()
+        run: |
+          if ! ls screenshots/*.png >/dev/null 2>&1; then
+            echo "No screenshots produced, skipping push"
+            exit 0
+          fi
+          TMP=$(mktemp -d)
+          cp screenshots/*.png "$TMP"/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin screenshots 2>/dev/null || true
+          if git ls-remote --exit-code --heads origin screenshots >/dev/null 2>&1; then
+            git checkout -B screenshots origin/screenshots
+            git rm -rf . 2>/dev/null || true
+          else
+            git checkout --orphan screenshots
+            git rm -rf . 2>/dev/null || true
+          fi
+          cp "$TMP"/*.png .
+          git add -A
+          git commit -m "ci: screenshots from ${GITHUB_SHA}"
+          git push -f origin screenshots

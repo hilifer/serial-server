@@ -3,174 +3,179 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>耀嵘 — 光储充智慧能源管理平台</title>
+<!-- Browser-native rotation: not affected by JS throttling / Sleeping Tabs / stuck navigation. -->
+<meta http-equiv="refresh" content="20; url=/">
+<title>光储充一体化监控平台</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 <div class="energy-bigscreen">
   <!-- Background -->
-  <div class="bg-particles"></div>
-  <div class="bg-grid"></div>
+  <div class="background-animation">
+    <div class="bg-grid"></div>
+  </div>
 
   <!-- Header -->
-  <div class="dash-header">
-    <div class="dash-logo">
-      <div class="dash-logo-icon">⚡</div>
-      <div>
-        <div class="dash-title">耀嵘光储充智慧能源管理平台</div>
-        <div class="dash-subtitle">Smart Energy Management Platform</div>
+  <header class="dash-header">
+    <div class="dash-header-content">
+      <div class="dash-logo">
+        <img src="/images/logo.jpg" class="dash-logo-img" alt="logo">
+        <div class="dash-title">光储充一体化监控平台</div>
+        <div class="dash-subtitle">实时能量流监控</div>
+        <a href="/" class="back-link" title="返回地图">&#128065;</a>
       </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:20px">
       <div class="dash-time">
         <div class="dash-time-value" id="dashClock"></div>
         <div class="dash-time-date" id="dashDate"></div>
       </div>
-      <a href="/" class="back-link">◀ 返回地图</a>
     </div>
-  </div>
+  </header>
 
   <!-- Main 3-column -->
-  <div class="dash-main">
-    <!-- Left: Storage + Solar -->
+  <main class="dash-main">
+    <!-- Left: Energy consumption cards -->
     <div class="dash-col">
-      <!-- Storage card -->
       <div class="panel-card">
-        <div class="card-hdr">
-          <span class="card-title">储能系统</span>
-          <div class="status-dot online"></div>
-        </div>
-        <div class="soc-container">
-          <div class="soc-circle">
-            <svg class="soc-svg" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(0,255,255,0.2)" stroke-width="8"/>
-              <circle id="socArc" cx="60" cy="60" r="54" fill="none" stroke="#00ffff" stroke-width="8"
-                      stroke-dasharray="339.292" stroke-dashoffset="67.86"
-                      transform="rotate(-90 60 60)"/>
-            </svg>
-            <div class="soc-text">
-              <span class="soc-value" id="socValue">--%</span>
-              <span class="soc-label">SOC</span>
-            </div>
-          </div>
-        </div>
-        <div class="power-grid">
-          <div class="power-item"><span class="lbl">电压</span><span class="val" id="storV">--V</span></div>
-          <div class="power-item"><span class="lbl">电流</span><span class="val" id="storI">--A</span></div>
-          <div class="power-item"><span class="lbl">功率</span><span class="val" id="storP">--kW</span></div>
+        <div class="card-hdr"><span class="card-title">电网购电量</span><div class="status-dot online"></div></div>
+        <div class="metric-grid">
+          <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="gridBuyTotal">--</span></div>
         </div>
       </div>
-
-      <!-- Solar card -->
       <div class="panel-card">
-        <div class="card-hdr">
-          <span class="card-title">光伏发电</span>
-          <div class="status-dot online"></div>
+        <div class="card-hdr"><span class="card-title">直流桩耗电量</span><div class="status-dot online"></div></div>
+        <div class="sub-section">
+          <h5>直流桩1</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="dc1MonthE">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="dc1YearE" data-addr="8">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="dc1TotalE">--</span></div>
+          </div>
+          <h5>直流桩2</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="dc2MonthE">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="dc2YearE" data-addr="9">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="dc2TotalE">--</span></div>
+          </div>
         </div>
-        <div class="solar-icon">☀️</div>
-        <div class="solar-big"><span id="solarP">--</span><span class="solar-unit"> kW</span></div>
-        <div class="power-grid">
-          <div class="power-item"><span class="lbl">电压</span><span class="val" id="solarV">--V</span></div>
-          <div class="power-item"><span class="lbl">电流</span><span class="val" id="solarI">--A</span></div>
-          <div class="power-item"><span class="lbl">温度</span><span class="val" id="solarT">--°C</span></div>
+      </div>
+      <div class="panel-card">
+        <div class="card-hdr"><span class="card-title">交流桩耗电量</span><div class="status-dot online"></div></div>
+        <div class="metric-grid">
+          <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="acTotalE">--</span></div>
         </div>
       </div>
     </div>
 
-    <!-- Center: Flow diagram + Charging map -->
+    <!-- Center: Flow diagram + Office consumption -->
     <div class="dash-col">
-      <!-- Realtime monitor -->
-      <div class="panel-card" style="flex:1.2">
+      <!-- Realtime power flow (matches test2.vue .realtime-monitor 600px) -->
+      <div class="panel-card flow-panel">
         <div class="card-hdr">
-          <span class="card-title">实时电力监控</span>
-          <div class="live-tag"><span class="live-dot"></span>LIVE</div>
-        </div>
-        <div class="flow-diagram">
-          <div class="flow-row">
-            <div class="flow-node" id="nodeGrid">
-              <div class="node-icon">🔌</div>
-              <div class="node-name">电网</div>
-              <div class="node-val" id="gridV">--V</div>
-              <div class="node-val" id="gridI">--A</div>
-              <div class="node-val" id="gridP">--kW</div>
-            </div>
-            <div class="flow-arrow">➡️</div>
-            <div class="flow-node" id="nodeStorage">
-              <div class="node-icon">🔋</div>
-              <div class="node-name">储能</div>
-              <div class="node-val" id="storV2">--V</div>
-              <div class="node-val" id="storI2">--A</div>
-            </div>
-            <div class="flow-arrow">⬅️➡️</div>
-            <div class="flow-node" id="nodeSolar">
-              <div class="node-icon">☀️</div>
-              <div class="node-name">光伏</div>
-              <div class="node-val" id="solarV2">--V</div>
-              <div class="node-val" id="solarI2">--A</div>
-            </div>
-          </div>
-          <div class="flow-row">
-            <div class="flow-arrow down">⬇️</div>
-          </div>
-          <div class="flow-row">
-            <div class="flow-node" id="nodeCharge">
-              <div class="node-icon">🚗</div>
-              <div class="node-name">充电桩</div>
-              <div class="node-val" id="chargeV">--V</div>
-              <div class="node-val" id="chargeI">--A</div>
-              <div class="node-val" id="chargeP">--kW</div>
-            </div>
-            <div style="flex:1"></div>
-            <div class="flow-node" id="nodeLoad">
-              <div class="node-icon">🏢</div>
-              <div class="node-name">用户负载</div>
-              <div class="node-val" id="loadV">--V</div>
-              <div class="node-val" id="loadI">--A</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Charging pile map -->
-      <div class="panel-card">
-        <div class="card-hdr">
-          <span class="card-title">充电桩分布</span>
-          <div style="font-size:13px">
-            <span style="color:#00ff88">空闲: <b id="mapFree">-</b></span>
-            <span style="color:#ff6b6b;margin-left:10px">占用: <b id="mapBusy">-</b></span>
-          </div>
-        </div>
-        <div class="pile-grid" id="pileGrid"></div>
-      </div>
-    </div>
-
-    <!-- Right: System status -->
-    <div class="dash-col">
-      <!-- Meter overview -->
-      <div class="panel-card">
-        <div class="card-hdr">
-          <span class="card-title">电表概览</span>
+          <span class="card-title">实时能量流监控</span>
           <div class="status-dot online"></div>
         </div>
-        <div id="meterList" class="status-list"></div>
-      </div>
-
-      <!-- System status -->
-      <div class="panel-card">
-        <div class="card-hdr">
-          <span class="card-title">系统状态</span>
-          <div style="color:#00ff88;font-size:13px;font-weight:bold">正常</div>
+        <div class="flow-canvas-wrap" id="flowDiagram">
+          <!-- SVG flow diagram rendered by JS -->
         </div>
-        <div id="sysStatus" class="status-list"></div>
+      </div>
+      <!-- Office consumption -->
+      <div class="panel-card office-card">
+        <div class="card-hdr"><span class="card-title">办公室耗电量</span><div class="status-dot online"></div></div>
+        <div class="metric-grid metric-grid-bg">
+          <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="officeTotalE">--</span></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Footer -->
-  <div class="dash-footer">
-    <div><span class="fl">今日发电量:</span><span class="fv" id="todayGen">--</span><span class="fl"> kWh</span></div>
-    <div class="alert" id="alertMsg"></div>
-    <div><span class="fl">数据更新:</span><span class="fv" id="updateTime">--</span></div>
+    <!-- Right: Solar + Storage -->
+    <div class="dash-col">
+      <!-- Solar -->
+      <div class="panel-card">
+        <div class="card-hdr"><span class="solar-icon-inline">☀️</span><span class="card-title">光伏发电量</span><div class="status-dot online"></div></div>
+        <div class="solar-stats">
+          <div class="solar-stat">
+            <div class="solar-stat-label">装机功率</div>
+            <div class="solar-stat-value">285.6<span class="solar-stat-unit">kW</span></div>
+          </div>
+          <div class="solar-stat">
+            <div class="solar-stat-label">发电功率</div>
+            <div class="solar-stat-value" id="solarPowerBig">--<span class="solar-stat-unit">kW</span></div>
+          </div>
+          <div class="solar-stat">
+            <div class="solar-stat-label">发电率</div>
+            <div class="solar-stat-value" id="solarEfficiency">--<span class="solar-stat-unit">%</span></div>
+          </div>
+        </div>
+        <div class="pv-vi-dual">
+          <div class="pv-vi-group">
+            <div class="pv-vi-title">光伏1</div>
+            <div class="pv-vi-boxes">
+              <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv1Voltage">--V</div></div>
+              <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv1Current">--A</div></div>
+            </div>
+          </div>
+          <div class="pv-vi-group">
+            <div class="pv-vi-title">光伏2</div>
+            <div class="pv-vi-boxes">
+              <div class="vi-box"><div class="vi-label">电压</div><div class="vi-value" id="pv2Voltage">--V</div></div>
+              <div class="vi-box"><div class="vi-label">电流</div><div class="vi-value" id="pv2Current">--A</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="sub-section">
+          <h5>光伏1</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="pv1MonthE">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="pv1YearE" data-addr="10">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="pv1TotalE">--</span></div>
+          </div>
+          <h5>光伏2</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="pv2MonthE">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="pv2YearE" data-addr="11">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="pv2TotalE">--</span></div>
+          </div>
+        </div>
+      </div>
+      <!-- Storage -->
+      <div class="panel-card">
+        <div class="card-hdr"><span class="card-title">储能用电量</span><div class="status-dot online"></div></div>
+        <div class="battery-hero">
+          <div class="battery-svg">
+            <div class="battery-cap"></div>
+            <div class="battery-shell">
+              <div class="battery-fill" id="batteryFill" style="--soc:0%"></div>
+              <div class="battery-sheen"></div>
+            </div>
+          </div>
+          <div class="battery-info">
+            <div class="battery-label">电池 SOC</div>
+            <div class="battery-soc-big" id="batterySocPct">--<span class="battery-unit">%</span></div>
+          </div>
+        </div>
+        <div class="sub-section">
+          <h5>电池充电电量</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="batChargeMonth">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="batChargeYear" data-addr="6" data-field="forward">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="batChargeTotal">--</span></div>
+          </div>
+          <h5>电池放电电量</h5>
+          <div class="metric-grid">
+            <div class="metric-item"><span class="metric-label">月电量(kWh)</span><span class="metric-value" id="batDischargeMonth">--</span></div>
+            <div class="metric-item"><span class="metric-label">年电量(kWh)</span><span class="metric-value clickable" id="batDischargeYear" data-addr="6" data-field="reverse">--</span></div>
+            <div class="metric-item"><span class="metric-label">总电量(kWh)</span><span class="metric-value" id="batDischargeTotal">--</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Flowing lights -->
+  <div class="flowing-lights">
+    <div class="light-beam beam-1"></div>
+    <div class="light-beam beam-2"></div>
+    <div class="light-beam beam-3"></div>
   </div>
 </div>
 

@@ -1,6 +1,11 @@
 # MQTT WebSocket Serial Server Configuration
+# enabled=false skips the MQTT bridge entirely (no broker connect, no
+# per-port _read_loop polling) — use this when only the REST API + caches
+# are needed, since the bridge otherwise competes with MeterCache for
+# the COM33 RS485 bus.
 
 mqtt:
+  enabled: false
   broker: "localhost"
   port: 1883
   ws_port: 9001
@@ -16,7 +21,7 @@ serial_ports:
     bytesize: 8
     parity: "N"             # N=None, E=Even, O=Odd
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com31"
 
   - name: "COM32"
@@ -25,7 +30,7 @@ serial_ports:
     bytesize: 8
     parity: "N"
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com32"
 
   - name: "COM33"
@@ -34,8 +39,27 @@ serial_ports:
     bytesize: 8
     parity: "N"
     stopbits: 1
-    timeout: 0.1
+    timeout: 0.3
     mqtt_topic_prefix: "serial/com33"
+
+# Background data caches — keep the latest meter/parking values in
+# memory so API endpoints respond in <1ms instead of holding the serial
+# bus on every request.
+cache:
+  meter_interval: 5.0     # seconds between full 10-meter scan passes
+  parking_interval: 5.0   # seconds between full 54-space scan passes
+  odoo_ttl: 5.0           # /charging/* Odoo responses cached this long
+  yearly_refresh: 3600.0  # seconds between full yearly energy refresh (1h)
+
+# BMS (battery management system) over Modbus TCP
+# SOC is read at function code 0x03 from register `soc_addr` (1 register, %).
+bms:
+  host: "10.6.120.10"
+  port: 502
+  unit: 5
+  soc_addr: 304
+  timeout: 2.0
+  cache_ttl: 5.0
 
 # Parking space monitoring
 # COM31: Zone A, spaces 1-27 (Modbus addr 1-27)
@@ -47,3 +71,4 @@ parking:
 logging:
   level: "INFO"             # DEBUG, INFO, WARNING, ERROR
   file: "serial_server.log"
+  backup_count: 14          # rotate daily at midnight, keep this many days of history
