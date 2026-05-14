@@ -46,8 +46,8 @@ serial_ports:
 # memory so API endpoints respond in <1ms instead of holding the serial
 # bus on every request.
 cache:
-  meter_interval: 2.0     # seconds between full 10-meter scan passes
-  parking_interval: 2.0   # seconds between full 54-space scan passes
+  meter_interval: 5.0     # seconds between full 10-meter scan passes
+  parking_interval: 5.0   # seconds between full 54-space scan passes
   odoo_ttl: 5.0           # /charging/* Odoo responses cached this long
   yearly_refresh: 3600.0  # seconds between full yearly energy refresh (1h)
 
