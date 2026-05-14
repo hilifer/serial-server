@@ -10,6 +10,31 @@ echo.
 REM Navigate to script directory
 cd /d "%~dp0"
 
+REM ----------------------------------------------------------
+REM Self-register for boot autostart (one-time, idempotent).
+REM Drops a .lnk into the user's Startup folder pointing back
+REM at this very file. Windows then runs start.bat at every
+REM user logon — no Task Scheduler / admin needed. If the
+REM shortcut already exists this block does nothing.
+REM ----------------------------------------------------------
+set "STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+set "STARTUP_LNK=%STARTUP_DIR%\光储充管理系统.lnk"
+if not exist "%STARTUP_LNK%" (
+  echo [0/3] Installing boot autostart shortcut...
+  powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$s=(New-Object -COM WScript.Shell).CreateShortcut('%STARTUP_LNK%');" ^
+    "$s.TargetPath='%~f0';" ^
+    "$s.WorkingDirectory='%~dp0';" ^
+    "$s.WindowStyle=1;" ^
+    "$s.Save()" >nul 2>&1
+  if exist "%STARTUP_LNK%" (
+    echo   Installed: %STARTUP_LNK%
+  ) else (
+    echo   WARNING: Could not create autostart shortcut.
+  )
+  echo.
+)
+
 REM Pull latest code from git
 echo [1/3] Updating code from git...
 git pull origin claude/understand-project-TBDmP 2>nul
