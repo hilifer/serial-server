@@ -195,10 +195,10 @@ a{color:inherit;text-decoration:none}
 /* Solar 3-stat header (装机 / 发电 / 发电率) */
 .solar-stats{
   display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(4px,.6vw,10px);
-  margin-bottom:clamp(6px,1vh,12px);
+  margin-bottom:clamp(3px,.5vh,7px);
 }
 .solar-stat{
-  text-align:center;padding:clamp(6px,.8vh,10px) 2px;
+  text-align:center;padding:clamp(3px,.5vh,7px) 2px;
   border:1px solid rgba(255,200,70,.25);border-radius:8px;
   background:linear-gradient(180deg,rgba(255,180,60,.10),rgba(255,100,60,.04));
 }
@@ -212,7 +212,7 @@ a{color:inherit;text-decoration:none}
 .solar-stat-unit{font-size:clamp(9px,1vw,12px);color:rgba(255,255,255,.7);-webkit-text-fill-color:rgba(255,255,255,.7);background:none}
 
 /* Dual PV V/I */
-.pv-vi-dual{display:flex;gap:clamp(6px,.8vw,14px);margin-bottom:clamp(6px,1vh,12px)}
+.pv-vi-dual{display:flex;gap:clamp(6px,.8vw,14px);margin-bottom:clamp(3px,.5vh,7px)}
 .pv-vi-group{flex:1}
 .pv-vi-title{font-size:clamp(9px,1vw,11px);color:rgba(255,255,255,.5);margin-bottom:4px;text-align:center}
 .pv-vi-boxes{display:flex;gap:clamp(3px,.4vw,8px)}
