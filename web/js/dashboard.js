@@ -65,8 +65,8 @@ function renderFlowDiagram(){
   // Red BUS busbar: joins AC/DC.right + DC/AC.right (vertical strip at CX),
   // then a horizontal stub to DC/DC.left at midY. PV merge enters from
   // above into the same vertical strip; office+AC merge enters DC/AC.bottom.
-  const bW=Math.min(W*.10,82);
-  const bH=Math.min(H*.10,60);
+  const bW=Math.min(W*.08,66);
+  const bH=Math.min(H*.08,48);
   const blockGap=bH*.6;                       // vertical gap between AC/DC & DC/AC
   const leftCX=CX-bW*.75;
   const rightCX=CX+bW*.75;
