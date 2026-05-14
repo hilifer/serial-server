@@ -161,13 +161,18 @@ function renderFlowDiagram(){
   // arrows poked through the red BUS for PV lines and showed only their
   // wide back-edge as a flat trapezoid against destination blocks/circles,
   // since the tip was hidden inside.
+  // fill="context-stroke" makes the arrow inherit the path's stroke color
+  // — so red lines get red arrows, green lines get green arrows. A single
+  // hard-coded blue arrow clashed with both colour groups and blended into
+  // the dark-blue panel background, making grid/DC pile/office arrows look
+  // invisible. Size bumped 14×10 → 18×12 for "weightier" visual presence.
   let svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
     <defs>
-      <marker id="arrow" markerWidth="14" markerHeight="10" refX="14" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-        <polygon points="0 0, 14 5, 0 10" fill="#3b82f6" opacity="0.8"/>
+      <marker id="arrow" markerWidth="18" markerHeight="12" refX="18" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="0 0, 18 6, 0 12" fill="context-stroke"/>
       </marker>
-      <marker id="arrow-rev" markerWidth="14" markerHeight="10" refX="0" refY="5" orient="auto" markerUnits="userSpaceOnUse">
-        <polygon points="14 0, 0 5, 14 10" fill="#3b82f6" opacity="0.8"/>
+      <marker id="arrow-rev" markerWidth="18" markerHeight="12" refX="0" refY="6" orient="auto" markerUnits="userSpaceOnUse">
+        <polygon points="18 0, 0 6, 18 12" fill="context-stroke"/>
       </marker>
     </defs>`;
 
