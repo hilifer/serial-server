@@ -42,11 +42,20 @@ def load_config(path: str = "config.yaml") -> dict:
     config_path = _get_base_dir() / path
     if not config_path.exists():
         config_path = Path(sys.executable).parent / path  # next to .exe
-    if config_path.exists() and yaml:
+    if config_path.exists():
+        # A config.yaml exists — it MUST be honoured. If PyYAML is missing
+        # we used to silently fall through to the built-in defaults, which
+        # have different settings (e.g. MQTT bridge ON) and would quietly
+        # run the system mis-configured. Fail loudly instead.
+        if yaml is None:
+            raise RuntimeError(
+                f"找到了配置文件 {config_path}，但 PyYAML 未安装，无法读取。"
+                " 请运行: pip install pyyaml"
+            )
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
-    # Built-in default configuration
+    # No config.yaml at all — use built-in default configuration
     return {
         "mqtt": {
             "broker": "localhost",
@@ -318,7 +327,7 @@ def main():
 
     # 3. Import and start Flask API (blocking)
     from meter_api import (app, init_bms, init_meter_cache, init_parking_cache,
-                           init_odoo_cache, init_yearly_cache)
+                           init_odoo_cache, init_yearly_cache, stop_caches)
     init_bms(config)
     cache_cfg = config.get("cache", {})
     init_meter_cache(scan_interval_s=float(cache_cfg.get("meter_interval", 2.0)))
@@ -326,8 +335,22 @@ def main():
     init_odoo_cache(ttl_s=float(cache_cfg.get("odoo_ttl", 5.0)))
     init_yearly_cache(refresh_interval_s=float(cache_cfg.get("yearly_refresh", 3600.0)))
 
-    def _signal_handler(sig, frame):
+    _shutdown_done = threading.Event()
+
+    def _shutdown():
+        """Release every resource cleanly. Idempotent — safe to call from
+        both the signal handler and atexit. Stopping the cache threads and
+        closing the serial ports here means the COM ports are actually
+        released, so a fast restart doesn't hit 'port in use'.
+        """
+        if _shutdown_done.is_set():
+            return
+        _shutdown_done.set()
         print("\n正在关闭...")
+        try:
+            stop_caches()
+        except Exception:
+            pass
         if mqtt_server is not None:
             try:
                 mqtt_server.stop()
@@ -338,15 +361,21 @@ def main():
                 mgr.close()
             except Exception:
                 pass
+        logging.shutdown()
+
+    def _signal_handler(sig, frame):
+        _shutdown()
         os._exit(0)
 
     signal.signal(signal.SIGINT, _signal_handler)
     signal.signal(signal.SIGTERM, _signal_handler)
 
-    # Windows: Ctrl+C needs special handling for Flask threaded mode
+    # Windows: Flask threaded mode doesn't exit cleanly on Ctrl+C, so we
+    # still hard-exit — but run the proper cleanup first via atexit instead
+    # of a bare os._exit that would skip releasing the COM ports.
     if sys.platform == 'win32':
         import atexit
-        atexit.register(lambda: os._exit(0))
+        atexit.register(_shutdown)
 
     api_port = config.get("api", {}).get("port", 8000)
     logger.info("Starting API service on http://0.0.0.0:%d ...", api_port)
