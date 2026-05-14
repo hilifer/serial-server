@@ -111,11 +111,15 @@ function renderFlowDiagram(){
   // Merge level pushed up close to the PV nodes so the horizontal segment
   // sits ABOVE the wrapper top border, not crossing it.
   const pvMergeY=N.pv1.y+R+(BX.acdc.t-bH*.45-(N.pv1.y+R))*.5;
+  // Stop the vertical drop just ABOVE the BUS line so the arrow marker
+  // (refX=7 → tip extends 7px past the line endpoint) lands exactly on
+  // the red BUS instead of poking through to the other side.
+  const pvBusEndY=midY-8;
   function pv1Path(){
-    return `M${N.pv1.x},${N.pv1.y+R} L${N.pv1.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
+    return `M${N.pv1.x},${N.pv1.y+R} L${N.pv1.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${pvBusEndY}`;
   }
   function pv2Path(){
-    return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${midY}`;
+    return `M${N.pv2.x},${N.pv2.y+R} L${N.pv2.x},${pvMergeY} L${pvBusX},${pvMergeY} L${pvBusX},${pvBusEndY}`;
   }
   // 储能 → DC/DC RIGHT side, vertical center. Path direction is
   // CENTER → STORAGE (not the reverse) so the existing arrow logic in
