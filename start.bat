@@ -35,6 +35,20 @@ if not exist "%STARTUP_LNK%" (
   echo.
 )
 
+REM ----------------------------------------------------------
+REM Boot delay — on a cold boot the network adapter is usually
+REM not up yet (DHCP / static IP still settling). Wait a fixed
+REM window before anything network-dependent runs (git pull,
+REM serial bus, meter/BMS reads) so a freshly booted kiosk has
+REM time to get online — and so the operator has a chance to fix
+REM the static IP before the fullscreen browser takes over.
+REM Press any key to skip (useful when launching manually).
+REM ----------------------------------------------------------
+set "BOOT_DELAY=90"
+echo Waiting %BOOT_DELAY%s for network to settle (press any key to skip)...
+timeout /t %BOOT_DELAY%
+echo.
+
 REM Pull latest code from git
 echo [1/3] Updating code from git...
 git pull origin claude/understand-project-TBDmP 2>nul
