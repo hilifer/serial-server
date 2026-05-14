@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   renderFlowDiagram();
   window.addEventListener('resize',()=>{renderFlowDiagram();updateFlowLabels()});
   bindYearClicks();
-  addTimer(pollAllMeters,10000);       // 实时+当月：10秒（后端缓存本身已是5秒一刷新，前端拉更密只会拿到同一个值）
+  addTimer(pollAllMeters,2000);        // 实时+当月：2秒（后端只是查 cache，单次响应 <1ms，前端拉密点对响应没什么压力）
   addTimer(pollYearly,3600000);        // 年数据：1小时
   addTimer(pollBatterySoc,10000);      // 电池SOC：10秒
 });
