@@ -64,6 +64,26 @@ REM stragglers (e.g. renderer that didn't honour WM_CLOSE).
 timeout /t 2 /nobreak >nul
 taskkill /IM msedge.exe /F >nul 2>&1
 
+REM Bulletproof: forcibly mark Edge's last session as clean in the
+REM Preferences JSON before launching. The --disable-session-crashed-bubble
+REM flag alone is unreliable on recent Edge builds, and a full system
+REM shutdown (power button, blackout) never lets Edge write a clean exit
+REM either. Rewriting these two keys to Normal/true makes Edge skip the
+REM 还原页面 prompt regardless of how the previous session ended.
+REM Loop over every profile dir (Default + Profile *) so multi-profile
+REM installs are also covered.
+echo Marking Edge session as clean...
+for /d %%P in ("%LOCALAPPDATA%\Microsoft\Edge\User Data\Default" "%LOCALAPPDATA%\Microsoft\Edge\User Data\Profile*") do (
+  if exist "%%~P\Preferences" (
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+      "$f='%%~P\Preferences';" ^
+      "$t=Get-Content -Raw -LiteralPath $f;" ^
+      "$t=$t -replace '\"exit_type\":\"[^\"]*\"','\"exit_type\":\"Normal\"';" ^
+      "$t=$t -replace '\"exited_cleanly\":false','\"exited_cleanly\":true';" ^
+      "[System.IO.File]::WriteAllText($f,$t)" 2>nul
+  )
+)
+
 REM Background: wait for service ready, then open browser.
 REM Edge flags break down into two groups:
 REM   (a) anti-throttle (keep the kiosk page from being frozen by Edge
