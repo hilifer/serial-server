@@ -285,6 +285,16 @@ def setup_logging(config: dict):
 
     logging.basicConfig(level=level, handlers=handlers)
 
+    # Silence noisy third-party loggers that don't carry actionable info:
+    #   waitress.queue logs "Task queue depth is N" on every burst of
+    #     concurrent requests — depth 1~2 is normal, not a problem, just
+    #     spam. We still let real ERRORs through.
+    #   werkzeug logs every HTTP request at INFO — fine for dev, useless
+    #     noise on a long-running kiosk box.
+    logging.getLogger("waitress.queue").setLevel(logging.ERROR)
+    logging.getLogger("waitress").setLevel(logging.ERROR)
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
 
 # ---------------------------------------------------------------------------
 # Main — start both MQTT WS bridge + Flask API in one process
