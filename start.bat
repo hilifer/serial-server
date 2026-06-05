@@ -11,6 +11,21 @@ REM Navigate to script directory
 cd /d "%~dp0"
 
 REM ----------------------------------------------------------
+REM Single-instance guard. If the API is already listening on
+REM port 8000, another copy of the project is already running.
+REM Starting a second one would fight over the COM ports (each
+REM serial port can only be opened by ONE process) and kill the
+REM running kiosk browser — exactly the "串口连不上 / 老是重跑"
+REM symptom. So just bail out instead.
+REM ----------------------------------------------------------
+netstat -ano | findstr ":8000" | findstr "LISTENING" >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+  echo 项目已在运行（端口 8000 已被占用），本次启动跳过。
+  timeout /t 3 >nul
+  exit /b 0
+)
+
+REM ----------------------------------------------------------
 REM Self-register for boot autostart (one-time, idempotent).
 REM Drops a .lnk into the user's Startup folder pointing back
 REM at this very file. Windows then runs start.bat at every
@@ -107,21 +122,11 @@ REM Bulletproof: forcibly mark Edge's last session as clean in the
 REM Preferences JSON before launching. The --disable-session-crashed-bubble
 REM flag alone is unreliable on recent Edge builds, and a full system
 REM shutdown (power button, blackout) never lets Edge write a clean exit
-REM either. Rewriting these two keys to Normal/true makes Edge skip the
-REM 还原页面 prompt regardless of how the previous session ended.
-REM Loop over every profile dir (Default + Profile *) so multi-profile
-REM installs are also covered.
+REM either. The logic lives in mark_edge_clean.ps1 — doing it inline with
+REM ^ line-continuation inside a for/() block parsed unreliably and threw
+REM a PowerShell syntax error on every boot.
 echo Marking Edge session as clean...
-for /d %%P in ("%LOCALAPPDATA%\Microsoft\Edge\User Data\Default" "%LOCALAPPDATA%\Microsoft\Edge\User Data\Profile*") do (
-  if exist "%%~P\Preferences" (
-    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "$f='%%~P\Preferences';" ^
-      "$t=Get-Content -Raw -LiteralPath $f;" ^
-      "$t=$t -replace '\"exit_type\":\"[^\"]*\"','\"exit_type\":\"Normal\"';" ^
-      "$t=$t -replace '\"exited_cleanly\":false','\"exited_cleanly\":true';" ^
-      "[System.IO.File]::WriteAllText($f,$t)" 2>nul
-  )
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0mark_edge_clean.ps1" >nul 2>&1
 
 REM Background: wait for service ready, then open browser.
 REM Edge flags break down into two groups:

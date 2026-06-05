@@ -152,6 +152,16 @@ def init_bms(cfg: dict) -> None:
                 _bms.host, _bms.port, _bms.unit, _bms.soc_addr)
 
 
+def stop_caches() -> None:
+    """Signal every background cache thread to stop. Called on shutdown."""
+    for c in (_meter_cache, _parking_cache, _yearly_cache):
+        if c is not None:
+            try:
+                c.stop()
+            except Exception:
+                pass
+
+
 @app.route("/")
 def serve_index():
     return app.send_static_file("index.html")
@@ -572,18 +582,24 @@ def _read_meter_yearly(ser, meter) -> dict:
 
 @app.get("/meter/<int:addr>/yearly")
 def get_yearly(addr: int):
-    """Read yearly energy summary — served from YearlyCache when available."""
-    meter = get_meter(addr)
-    if _yearly_cache is not None:
-        entry = _yearly_cache.get(addr)
-        if entry and entry.get("payload"):
-            resp = dict(entry["payload"])
-            resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
-            resp["last_error"] = entry.get("error")
-            return jsonify(resp)
-        # Cache cold — fall through to direct read.
-    ser = get_serial()
-    return jsonify(_read_meter_yearly(ser, meter))
+    """Read yearly energy summary — served from YearlyCache only.
+
+    No direct-read fallback here on purpose: a yearly read walks all 12
+    months and holds the COM33 lock for several seconds, which would
+    starve MeterCache and the realtime endpoint. YearlyCache fires its
+    first scan immediately on startup, so data appears within minutes;
+    until then we return 503 rather than hammering the bus.
+    """
+    get_meter(addr)  # 404 if the address isn't configured
+    if _yearly_cache is None:
+        abort(503, description="年度缓存未启用")
+    entry = _yearly_cache.get(addr)
+    if not (entry and entry.get("payload")):
+        abort(503, description="年度数据正在初始化，请稍后重试")
+    resp = dict(entry["payload"])
+    resp["cache_age_s"] = round(time.time() - entry["ts"], 2)
+    resp["last_error"] = entry.get("error")
+    return jsonify(resp)
 
 
 # ===========================================================================
